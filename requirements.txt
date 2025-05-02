@@ -1,6 +1,5 @@
-
-streamlit
-youtube-transcript-api
+streamlit==1.32.0
 pytube
 openai-whisper
-ffmpeg-python    # للتأكد من توفر ffmpeg للتجزئة
+ffmpeg-python
+torch==2.1.2
