@@ -1,50 +1,56 @@
-
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.formatters import TextFormatter
+from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
+from youtube_transcript_api.proxies import WebshareProxyConfig
+from pytube import YouTube
+import whisper
+import os
 import re
 
+# —– إضافة تهيئة بروكسي (اختياري) —–
+# proxy_cfg = WebshareProxyConfig(proxy_username="USER", proxy_password="PASS")
+# ytt_api = YouTubeTranscriptApi(proxy_config=proxy_cfg)
+ytt_api = YouTubeTranscriptApi()
+
+model = whisper.load_model("base")  # تحميل موديل Whisper
+
 def extract_video_id(url):
-    match = re.search(r"(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})", url)
+    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
     return match.group(1) if match else None
 
-def get_transcript_paragraphs(video_url):
-    video_id = extract_video_id(video_url)
-    if not video_id:
-        return None, "الرابط غير صالح."
+def fallback_whisper(video_url):
+    yt = YouTube(video_url)
+    audio_stream = yt.streams.filter(only_audio=True).first()
+    out_file = audio_stream.download(filename="temp_audio.mp4")
+    result = model.transcribe("temp_audio.mp4", language="ar")
+    os.remove("temp_audio.mp4")
+    # تقسيم إلى فقرات
+    text = result["text"]
+    return text.replace('. ', '.\n\n').replace('؟ ', '؟\n\n').replace('! ', '!\n\n')
 
+def get_transcript(video_url):
+    vid = extract_video_id(video_url)
+    if not vid:
+        raise ValueError("رابط الفيديو غير صالح.")
     try:
-        transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=['ar', 'en'])
-        formatter = TextFormatter()
-        text = formatter.format_transcript(transcript)
+        data = ytt_api.fetch(vid, languages=['ar','en'])
+        # دمج النصوص
+        text = " ".join([seg["text"] for seg in data])
+        return text.replace('. ', '.\n\n').replace('؟ ', '؟\n\n').replace('! ', '!\n\n')
+    except NoTranscriptFound:
+        # إذا لا توجد ترجمة يوتيوب
+        return fallback_whisper(video_url)
+    except Exception:
+        # أي خطأ آخر (مثل IP Blocked) → اعتماد على Whisper
+        return fallback_whisper(video_url)
 
-        # تقسيم النص إلى فقرات حسب علامات الترقيم
-        paragraphs = text.replace('. ', '.\n\n').replace('؟ ', '؟\n\n').replace('! ', '!\n\n')
-
-        return paragraphs, None
-    except Exception as e:
-        return None, f"حدث خطأ: {e}"
-
-# واجهة ستريمليت
-st.set_page_config(page_title="استخراج نص من يوتيوب", layout="centered")
-st.title("استخراج النصوص من فيديوهات YouTube")
-
-video_url = st.text_input("أدخل رابط الفيديو:")
-
-if video_url:
-    with st.spinner("جارٍ استخراج النص..."):
-        paragraphs, error = get_transcript_paragraphs(video_url)
-    
-    if error:
-        st.error(error)
-    elif paragraphs:
-        st.subheader("النص المستخرج:")
-        st.text_area("النص على شكل فقرات", value=paragraphs, height=400)
-
-        # حفظ كملف TXT
-        st.download_button(
-            label="تحميل النص كملف .txt",
-            data=paragraphs,
-            file_name="youtube_transcript.txt",
-            mime="text/plain"
-        )
+# —– واجهة Streamlit —–
+st.title("استخراج النص من فيديو YouTube مع بروكسي أو Whisper")
+url = st.text_input("أدخل رابط الفيديو")
+if url:
+    with st.spinner("جارٍ المعالجة…"):
+        try:
+            paragraphs = get_transcript(url)
+            st.text_area("النص المستخرج", paragraphs, height=400)
+            st.download_button("تحميل .txt", paragraphs, file_name="transcript.txt")
+        except Exception as e:
+            st.error(str(e))
