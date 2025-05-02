@@ -5,17 +5,14 @@ import os
 import tempfile
 import re
 
-# عنوان التطبيق
 st.set_page_config(page_title="استخراج النصوص من YouTube", layout="centered")
 st.title("استخراج النصوص من فيديو YouTube")
 
-# دالة استخراج video_id من الرابط
 def extract_video_id(url):
     regex = r'(?:v=|\/)([0-9A-Za-z_-]{11})'
     match = re.search(regex, url)
     return match.group(1) if match else None
 
-# إدخال الرابط
 video_url = st.text_input("أدخل رابط فيديو YouTube:")
 
 if st.button("استخراج النص"):
@@ -23,13 +20,16 @@ if st.button("استخراج النص"):
         st.warning("الرجاء إدخال رابط.")
     else:
         try:
-            video_id = extract_video_id(video_url)
+            # تنظيف الرابط
+            clean_url = re.sub(r"&.*|\\?si=.*", "", video_url).replace("m.youtube.com", "www.youtube.com")
+
+            video_id = extract_video_id(clean_url)
             if not video_id:
                 st.error("تعذر استخراج معرف الفيديو. تحقق من الرابط.")
             else:
                 st.info("جاري تحميل الفيديو...")
 
-                yt = YouTube(video_url)
+                yt = YouTube(clean_url)
                 audio_stream = yt.streams.filter(only_audio=True).first()
 
                 with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_audio:
@@ -47,11 +47,8 @@ if st.button("استخراج النص"):
 
                 st.success("تم استخراج النص بنجاح!")
                 st.text_area("النص المستخرج:", value=formatted_text, height=300)
-
-                # زر تحميل الملف
                 st.download_button("تحميل النص كملف .txt", formatted_text, file_name="transcript.txt")
 
-                # تنظيف الملف المؤقت
                 os.remove(audio_path)
 
         except Exception as e:
