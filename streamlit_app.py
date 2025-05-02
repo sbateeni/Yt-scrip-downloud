@@ -1,52 +1,58 @@
-import os
-os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
-
 import streamlit as st
 from pytube import YouTube
 import whisper
+import os
 import tempfile
-import time
 import re
 
-st.title("استخراج النصوص من فيديوهات YouTube")
+# عنوان التطبيق
+st.set_page_config(page_title="استخراج النصوص من YouTube", layout="centered")
+st.title("استخراج النصوص من فيديو YouTube")
 
-video_url = st.text_input("أدخل رابط الفيديو:")
+# دالة استخراج video_id من الرابط
+def extract_video_id(url):
+    regex = r'(?:v=|\/)([0-9A-Za-z_-]{11})'
+    match = re.search(regex, url)
+    return match.group(1) if match else None
 
-if st.button("بدء الاستخراج") and video_url:
-    try:
-        with st.spinner("جاري التحقق من الرابط..."):
-            try:
+# إدخال الرابط
+video_url = st.text_input("أدخل رابط فيديو YouTube:")
+
+if st.button("استخراج النص"):
+    if not video_url:
+        st.warning("الرجاء إدخال رابط.")
+    else:
+        try:
+            video_id = extract_video_id(video_url)
+            if not video_id:
+                st.error("تعذر استخراج معرف الفيديو. تحقق من الرابط.")
+            else:
+                st.info("جاري تحميل الفيديو...")
+
                 yt = YouTube(video_url)
-                video_stream = yt.streams.filter(only_audio=True).first()
-                if video_stream is None:
-                    st.error("لم يتم العثور على ملف صوتي مناسب في الفيديو.")
-                    st.stop()
-            except Exception as e:
-                st.error(f"تعذر تحميل الفيديو. تأكد من صحة الرابط.\n\nالخطأ: {e}")
-                st.stop()
+                audio_stream = yt.streams.filter(only_audio=True).first()
 
-        with st.spinner("جاري تحميل الصوت..."):
-            temp_dir = tempfile.mkdtemp()
-            audio_path = os.path.join(temp_dir, "audio.mp4")
-            video_stream.download(output_path=temp_dir, filename="audio.mp4")
+                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_audio:
+                    audio_path = tmp_audio.name
+                    audio_stream.download(filename=audio_path)
 
-        with st.spinner("جاري استخراج النص باستخدام Whisper..."):
-            model = whisper.load_model("base")
-            result = model.transcribe(audio_path)
-            text = result["text"]
+                st.info("جاري تحويل الصوت إلى نص...")
 
-        # تقسيم النص إلى فقرات
-        sentences = re.split(r'(?<=[.!؟]) +', text)
-        paragraphs = [' '.join(sentences[i:i+3]) for i in range(0, len(sentences), 3)]
+                model = whisper.load_model("base")
+                result = model.transcribe(audio_path, fp16=False)
 
-        st.success("تم استخراج النص بنجاح!")
+                text = result["text"].strip()
+                paragraphs = text.split(". ")
+                formatted_text = "\n\n".join(p.strip() for p in paragraphs if p)
 
-        full_text = ""
-        for i, para in enumerate(paragraphs, 1):
-            st.markdown(f"**فقرة {i}:** {para}")
-            full_text += f"فقرة {i}:\n{para}\n\n"
+                st.success("تم استخراج النص بنجاح!")
+                st.text_area("النص المستخرج:", value=formatted_text, height=300)
 
-        st.download_button("تحميل النص كملف", full_text, file_name="video_transcript.txt")
+                # زر تحميل الملف
+                st.download_button("تحميل النص كملف .txt", formatted_text, file_name="transcript.txt")
 
-    except Exception as e:
-        st.error(f"حدث خطأ غير متوقع أثناء المعالجة:\n\n{e}")
+                # تنظيف الملف المؤقت
+                os.remove(audio_path)
+
+        except Exception as e:
+            st.error(f"حدث خطأ: {str(e)}")
