@@ -1,2 +1,6 @@
+
 streamlit
 youtube-transcript-api
+pytube
+openai-whisper
+ffmpeg-python    # للتأكد من توفر ffmpeg للتجزئة
