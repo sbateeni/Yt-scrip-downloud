@@ -1,56 +1,52 @@
+import os
+os.environ["STREAMLIT_WATCHER_TYPE"] = "none"
+
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi, NoTranscriptFound
-from youtube_transcript_api.proxies import WebshareProxyConfig
 from pytube import YouTube
 import whisper
-import os
+import tempfile
+import time
 import re
 
-# —– إضافة تهيئة بروكسي (اختياري) —–
-# proxy_cfg = WebshareProxyConfig(proxy_username="USER", proxy_password="PASS")
-# ytt_api = YouTubeTranscriptApi(proxy_config=proxy_cfg)
-ytt_api = YouTubeTranscriptApi()
+st.title("استخراج النصوص من فيديوهات YouTube")
 
-model = whisper.load_model("base")  # تحميل موديل Whisper
+video_url = st.text_input("أدخل رابط الفيديو:")
 
-def extract_video_id(url):
-    match = re.search(r"(?:v=|youtu\.be/)([A-Za-z0-9_-]{11})", url)
-    return match.group(1) if match else None
-
-def fallback_whisper(video_url):
-    yt = YouTube(video_url)
-    audio_stream = yt.streams.filter(only_audio=True).first()
-    out_file = audio_stream.download(filename="temp_audio.mp4")
-    result = model.transcribe("temp_audio.mp4", language="ar")
-    os.remove("temp_audio.mp4")
-    # تقسيم إلى فقرات
-    text = result["text"]
-    return text.replace('. ', '.\n\n').replace('؟ ', '؟\n\n').replace('! ', '!\n\n')
-
-def get_transcript(video_url):
-    vid = extract_video_id(video_url)
-    if not vid:
-        raise ValueError("رابط الفيديو غير صالح.")
+if st.button("بدء الاستخراج") and video_url:
     try:
-        data = ytt_api.fetch(vid, languages=['ar','en'])
-        # دمج النصوص
-        text = " ".join([seg["text"] for seg in data])
-        return text.replace('. ', '.\n\n').replace('؟ ', '؟\n\n').replace('! ', '!\n\n')
-    except NoTranscriptFound:
-        # إذا لا توجد ترجمة يوتيوب
-        return fallback_whisper(video_url)
-    except Exception:
-        # أي خطأ آخر (مثل IP Blocked) → اعتماد على Whisper
-        return fallback_whisper(video_url)
+        with st.spinner("جاري التحقق من الرابط..."):
+            try:
+                yt = YouTube(video_url)
+                video_stream = yt.streams.filter(only_audio=True).first()
+                if video_stream is None:
+                    st.error("لم يتم العثور على ملف صوتي مناسب في الفيديو.")
+                    st.stop()
+            except Exception as e:
+                st.error(f"تعذر تحميل الفيديو. تأكد من صحة الرابط.\n\nالخطأ: {e}")
+                st.stop()
 
-# —– واجهة Streamlit —–
-st.title("استخراج النص من فيديو YouTube مع بروكسي أو Whisper")
-url = st.text_input("أدخل رابط الفيديو")
-if url:
-    with st.spinner("جارٍ المعالجة…"):
-        try:
-            paragraphs = get_transcript(url)
-            st.text_area("النص المستخرج", paragraphs, height=400)
-            st.download_button("تحميل .txt", paragraphs, file_name="transcript.txt")
-        except Exception as e:
-            st.error(str(e))
+        with st.spinner("جاري تحميل الصوت..."):
+            temp_dir = tempfile.mkdtemp()
+            audio_path = os.path.join(temp_dir, "audio.mp4")
+            video_stream.download(output_path=temp_dir, filename="audio.mp4")
+
+        with st.spinner("جاري استخراج النص باستخدام Whisper..."):
+            model = whisper.load_model("base")
+            result = model.transcribe(audio_path)
+            text = result["text"]
+
+        # تقسيم النص إلى فقرات
+        sentences = re.split(r'(?<=[.!؟]) +', text)
+        paragraphs = [' '.join(sentences[i:i+3]) for i in range(0, len(sentences), 3)]
+
+        st.success("تم استخراج النص بنجاح!")
+
+        full_text = ""
+        for i, para in enumerate(paragraphs, 1):
+            st.markdown(f"**فقرة {i}:** {para}")
+            full_text += f"فقرة {i}:\n{para}\n\n"
+
+        st.download_button("تحميل النص كملف", full_text, file_name="video_transcript.txt")
+
+    except Exception as e:
+        st.error(f"حدث خطأ غير متوقع أثناء المعالجة:\n\n{e}")
