@@ -2,3 +2,4 @@ streamlit
 yt-dlp
 whisper
 validators
+numpy
