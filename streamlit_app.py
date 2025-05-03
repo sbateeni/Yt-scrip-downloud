@@ -1,40 +1,45 @@
 import streamlit as st
-from pytube import YouTube
 import whisper
-import os
 import tempfile
+import os
 import re
+import subprocess
 
 st.set_page_config(page_title="استخراج النصوص من YouTube", layout="centered")
 st.title("استخراج النصوص من فيديو YouTube")
 
-def extract_video_id(url):
-    regex = r'(?:v=|\/)([0-9A-Za-z_-]{11})'
-    match = re.search(regex, url)
-    return match.group(1) if match else None
+def clean_youtube_url(url):
+    # ينظف الروابط المختصرة أو روابط الجوال
+    url = url.replace("m.youtube.com", "www.youtube.com")
+    url = re.sub(r"\?si=.*", "", url)
+    url = re.sub(r"&.*", "", url)
+    return url
 
 video_url = st.text_input("أدخل رابط فيديو YouTube:")
 
 if st.button("استخراج النص"):
     if not video_url:
-        st.warning("الرجاء إدخال رابط.")
+        st.warning("يرجى إدخال رابط.")
     else:
         try:
+            st.info("جاري تحميل الفيديو...")
+
             # تنظيف الرابط
-            clean_url = re.sub(r"&.*|\\?si=.*", "", video_url).replace("m.youtube.com", "www.youtube.com")
+            cleaned_url = clean_youtube_url(video_url)
 
-            video_id = extract_video_id(clean_url)
-            if not video_id:
-                st.error("تعذر استخراج معرف الفيديو. تحقق من الرابط.")
-            else:
-                st.info("جاري تحميل الفيديو...")
+            with tempfile.TemporaryDirectory() as tmpdir:
+                audio_path = os.path.join(tmpdir, "audio.mp3")
 
-                yt = YouTube(clean_url)
-                audio_stream = yt.streams.filter(only_audio=True).first()
-
-                with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_audio:
-                    audio_path = tmp_audio.name
-                    audio_stream.download(filename=audio_path)
+                # تحميل الصوت فقط باستخدام yt-dlp
+                cmd = [
+                    "yt-dlp",
+                    "-f", "bestaudio",
+                    "--extract-audio",
+                    "--audio-format", "mp3",
+                    "-o", audio_path,
+                    cleaned_url
+                ]
+                subprocess.run(cmd, check=True)
 
                 st.info("جاري تحويل الصوت إلى نص...")
 
@@ -49,7 +54,7 @@ if st.button("استخراج النص"):
                 st.text_area("النص المستخرج:", value=formatted_text, height=300)
                 st.download_button("تحميل النص كملف .txt", formatted_text, file_name="transcript.txt")
 
-                os.remove(audio_path)
-
+        except subprocess.CalledProcessError:
+            st.error("فشل تحميل الفيديو. تأكد من أن الرابط صحيح.")
         except Exception as e:
             st.error(f"حدث خطأ: {str(e)}")
