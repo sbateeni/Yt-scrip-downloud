@@ -1,27 +1,32 @@
 import streamlit as st
-import yt_dlp
 import os
+import subprocess
+import sys
 import tempfile
 import shutil
-import validators  # للتحقق من الرابط
-import importlib
+import yt_dlp
+import validators
+import io
+from docx import Document
 
-# التحقق من مكتبة Whisper الصحيحة
-try:
-    whisper = importlib.import_module("whisper")
-    if not hasattr(whisper, "load_model"):
-        raise ImportError("Whisper المثبتة ليست من OpenAI. يرجى تثبيت النسخة الرسمية.")
-except ImportError as e:
-    st.error(f"خطأ في تحميل مكتبة Whisper: {e}")
-    st.stop()
+# التأكد من تثبيت whisper
+def ensure_whisper_installed():
+    try:
+        import whisper
+        if not hasattr(whisper, "load_model"):
+            raise ImportError("نسخة whisper غير صالحة")
+        return whisper
+    except Exception:
+        st.warning("جاري تثبيت مكتبة whisper الرسمية من OpenAI...")
+        subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/openai/whisper.git"])
+        import whisper
+        return whisper
 
-# عنوان التطبيق
+whisper = ensure_whisper_installed()
+
 st.title("أداة تحويل صوت فيديو يوتيوب إلى نص")
-
-# إدخال رابط الفيديو من المستخدم
 youtube_url = st.text_input("الرجاء إدخال رابط فيديو يوتيوب:")
 
-# زر بدء العملية
 if st.button("تحميل الصوت وتحويله إلى نص"):
     if youtube_url:
         if not validators.url(youtube_url):
@@ -63,45 +68,67 @@ if st.button("تحميل الصوت وتحويله إلى نص"):
                 if downloaded_filepath and os.path.exists(downloaded_filepath):
                     st.success("تم تحميل الصوت بنجاح.")
 
-                    st.info("جاري تحميل نموذج تحويل الكلام إلى نص...")
+                    st.info("جاري تحميل نموذج Whisper...")
                     with st.spinner("الرجاء الانتظار..."):
                         @st.cache_resource
-                        def load_whisper_model(model_name):
-                            return whisper.load_model(model_name)
-
-                        model = load_whisper_model("base")
+                        def load_model(name="base"):
+                            return whisper.load_model(name)
+                        model = load_model()
 
                     st.info("جاري تحويل الصوت إلى نص...")
                     with st.spinner("الرجاء الانتظار..."):
-                        transcription_result = model.transcribe(downloaded_filepath)
-                        transcribed_text = transcription_result["text"]
+                        result = model.transcribe(downloaded_filepath)
+                        text = result["text"]
 
-                    st.success("تم تحويل الصوت إلى نص بنجاح!")
+                    st.success("تم تحويل الصوت إلى نص!")
                     st.subheader("النص المستخرج:")
-                    st.text_area("نص الفيديو", transcribed_text, height=400)
+                    st.text_area("نص الفيديو", text, height=400)
+
+                    # تحميل كملف Word
+                    docx_buffer = io.BytesIO()
+                    doc = Document()
+                    doc.add_paragraph(text)
+                    doc.save(docx_buffer)
+                    docx_buffer.seek(0)
+
+                    st.download_button(
+                        label="تحميل كملف Word",
+                        data=docx_buffer,
+                        file_name="transcription.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                    )
+
+                    # تحميل كملف نصي
+                    txt_buffer = io.StringIO(text)
+                    st.download_button(
+                        label="تحميل كملف نصي",
+                        data=txt_buffer,
+                        file_name="transcription.txt",
+                        mime="text/plain"
+                    )
 
                 else:
-                    st.error("حدث خطأ في العثور على ملف الصوت المحمل.")
-
+                    st.error("لم يتم العثور على الملف الصوتي المحمل.")
             except yt_dlp.utils.DownloadError as e:
                 st.error(f"خطأ في تحميل الفيديو: {e}")
             except Exception as e:
-                st.error("حدث خطأ غير متوقع أثناء التنفيذ.")
+                st.error("حدث خطأ غير متوقع.")
                 st.error(f"تفاصيل الخطأ: {e}")
             finally:
                 if temp_dir and os.path.exists(temp_dir):
                     shutil.rmtree(temp_dir)
     else:
-        st.warning("الرجاء إدخال رابط فيديو يوتيوب للمتابعة.")
+        st.warning("الرجاء إدخال رابط فيديو.")
 
-# معلومات إضافية
 st.markdown("""
-<br>
 <p style='text-align: center;'>
-تستخدم هذه الأداة المكتبات التالية:
-<br>
-<code>streamlit</code> لإنشاء الواجهة الرسومية.<br>
-<code>yt-dlp</code> لتحميل الصوت من فيديو يوتيوب.<br>
-<code>whisper</code> لتحويل الصوت إلى نص.<br>
+تستخدم هذه الأداة:
+<br><code>streamlit</code> • <code>yt-dlp</code> • <code>whisper</code> • <code>python-docx</code>
 </p>
 """, unsafe_allow_html=True)
+
+# تثبيت python-docx إن لم تكن مثبتة (لبيئة Streamlit Cloud)
+try:
+    import docx
+except ImportError:
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-docx"])
