@@ -14,7 +14,10 @@ st.set_page_config(
 st.title("🎥 YouTube Video Transcription")
 st.markdown("""
 This application transcribes YouTube videos using Faster Whisper.
-Simply paste a YouTube URL and get the transcription!
+The process is:
+1. Download video from YouTube
+2. Convert to MP3 audio
+3. Extract text using Whisper AI
 """)
 
 # Initialize Whisper model
@@ -27,10 +30,15 @@ def load_whisper_model():
 def transcribe_audio(audio_path):
     try:
         model = load_whisper_model()
+        st.info("Starting transcription process...")
+        
+        # Transcribe the audio file
         segments, info = model.transcribe(audio_path, beam_size=5)
         
         # Combine all segments into one text
         full_text = " ".join([segment.text for segment in segments])
+        
+        st.success("Transcription completed!")
         return full_text
     except Exception as e:
         st.error(f"Error transcribing audio: {str(e)}")
@@ -43,11 +51,13 @@ def main():
     
     if st.button("Transcribe"):
         if youtube_url:
-            # Download video using the new downloader
-            audio_path = download_video_with_progress(youtube_url)
+            # Step 1: Download video and convert to MP3
+            with st.spinner("Step 1/2: Downloading video and converting to MP3..."):
+                audio_path = download_video_with_progress(youtube_url)
                 
             if audio_path:
-                with st.spinner("Transcribing audio..."):
+                # Step 2: Transcribe the audio
+                with st.spinner("Step 2/2: Transcribing audio..."):
                     transcription = transcribe_audio(audio_path)
                     
                 if transcription:
