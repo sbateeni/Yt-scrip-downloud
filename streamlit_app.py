@@ -9,15 +9,11 @@ import validators
 import io
 from docx import Document
 import torch
-import asyncio
-import nest_asyncio
 
-# Initialize asyncio for notebook-like environments
-nest_asyncio.apply()
-
-# Initialize PyTorch
-if not torch.cuda.is_available():
-    torch.set_num_threads(4)  # Limit CPU threads
+# Initialize PyTorch with CPU settings
+device = "cuda" if torch.cuda.is_available() else "cpu"
+if device == "cpu":
+    torch.set_num_threads(4)
 
 # التأكد من تثبيت whisper
 def ensure_whisper_installed():
