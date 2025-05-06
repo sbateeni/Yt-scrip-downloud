@@ -5,6 +5,8 @@ import ssl
 import certifi
 import urllib3
 import requests
+import subprocess
+import sys
 
 def download_audio(url, temp_dir):
     """تحميل الصوت من فيديو يوتيوب"""
@@ -12,6 +14,12 @@ def download_audio(url, temp_dir):
         # تكوين SSL
         ssl_context = ssl.create_default_context(cafile=certifi.where())
         urllib3.disable_warnings()
+        
+        # تحديث yt-dlp
+        try:
+            subprocess.check_call([sys.executable, "-m", "pip", "install", "--upgrade", "yt-dlp"])
+        except Exception as e:
+            st.warning("تعذر تحديث yt-dlp، سيتم استخدام الإصدار الحالي")
         
         audio_filename_template = os.path.join(temp_dir, 'audio')
         ydl_opts = {
@@ -42,6 +50,7 @@ def download_audio(url, temp_dir):
             'no_color': True,
             'prefer_insecure': True,
             'http_chunk_size': 10485760,
+            'ssl_verify': False,  # تعطيل التحقق من SSL
         }
 
         # محاولة التحميل المباشر
@@ -50,7 +59,7 @@ def download_audio(url, temp_dir):
                 st.info("جاري تحميل الفيديو...")
                 info_dict = ydl.extract_info(url, download=True)
         except Exception as e:
-            st.warning("محاولة تحميل بديلة...")
+            st.warning(f"محاولة تحميل بديلة... (الخطأ: {str(e)})")
             # محاولة بديلة مع خيارات مختلفة
             ydl_opts.update({
                 'nocheckcertificate': True,
@@ -59,13 +68,14 @@ def download_audio(url, temp_dir):
                 'geo_bypass': True,
                 'geo_verification_proxy': None,
                 'source_address': '0.0.0.0',
+                'ssl_verify': False,
             })
             
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
                     info_dict = ydl2.extract_info(url, download=True)
             except Exception as e2:
-                st.warning("محاولة تحميل نهائية...")
+                st.warning(f"محاولة تحميل نهائية... (الخطأ: {str(e2)})")
                 # محاولة نهائية مع خيارات أبسط
                 ydl_opts.update({
                     'format': 'bestaudio',
@@ -75,6 +85,7 @@ def download_audio(url, temp_dir):
                     'prefer_insecure': True,
                     'geo_bypass': True,
                     'extract_flat': True,
+                    'ssl_verify': False,
                 })
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
                     info_dict = ydl3.extract_info(url, download=True)
