@@ -22,8 +22,8 @@ def download_audio(url, temp_dir):
             'noplaylist': True,
             'nocheckcertificate': True,
             'logtostderr': False,
-            'quiet': True,
-            'no_warnings': True,
+            'quiet': False,
+            'no_warnings': False,
             'socket_timeout': 30,
             'extractor_args': {
                 'youtube': {
@@ -47,6 +47,7 @@ def download_audio(url, temp_dir):
         # محاولة التحميل المباشر
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                st.info("جاري تحميل الفيديو...")
                 info_dict = ydl.extract_info(url, download=True)
         except Exception as e:
             st.warning("محاولة تحميل بديلة...")
@@ -78,12 +79,18 @@ def download_audio(url, temp_dir):
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
                     info_dict = ydl3.extract_info(url, download=True)
 
+        # البحث عن الملف المحمل
+        st.info("جاري البحث عن الملف الصوتي...")
         downloaded_filepath = None
         
-        # البحث عن الملف المحمل
-        for fname in os.listdir(temp_dir):
-            if fname.startswith(os.path.basename(audio_filename_template)):
-                downloaded_filepath = os.path.join(temp_dir, fname)
+        # البحث عن الملف بامتدادات مختلفة
+        for ext in ['.wav', '.mp3', '.m4a', '.webm']:
+            for fname in os.listdir(temp_dir):
+                if fname.startswith(os.path.basename(audio_filename_template)) or fname.endswith(ext):
+                    downloaded_filepath = os.path.join(temp_dir, fname)
+                    st.success(f"تم العثور على الملف: {fname}")
+                    break
+            if downloaded_filepath:
                 break
 
         if not downloaded_filepath:
