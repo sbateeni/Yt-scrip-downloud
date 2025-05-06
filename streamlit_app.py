@@ -104,16 +104,15 @@ if st.button("تحميل الصوت وتحويله إلى نص"):
 
                     st.download_button(
                         label="تحميل كملف Word",
-                        data=docx_buffer,
+                        data=docx_buffer.getvalue(),
                         file_name="transcription.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                     )
 
                     # تحميل كملف نصي
-                    txt_buffer = io.StringIO(text)
                     st.download_button(
                         label="تحميل كملف نصي",
-                        data=txt_buffer,
+                        data=text.encode('utf-8'),
                         file_name="transcription.txt",
                         mime="text/plain"
                     )
