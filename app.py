@@ -5,8 +5,8 @@ import os
 
 # Import utility functions
 from utils.youtube_utils import extract_video_id, download_audio, is_video_available
+from utils.youtube_transcript import get_youtube_transcript, get_available_languages, get_transcript_in_language
 from utils.transcript_utils import (
-    get_youtube_transcript, 
     transcribe_with_whisper,
     transcribe_with_speech_recognition,
     save_transcript
@@ -19,6 +19,8 @@ def initialize_session_state():
         st.session_state.processing = False
     if 'error' not in st.session_state:
         st.session_state.error = None
+    if 'available_languages' not in st.session_state:
+        st.session_state.available_languages = []
 
 def main():
     # Initialize session state
@@ -87,11 +89,26 @@ def main():
             
             # Try different transcription methods based on selection
             if transcription_method == "YouTube Built-in":
-                transcript = get_youtube_transcript(video_id)
-                if transcript:
-                    st.success("Transcript successfully extracted using YouTube's built-in transcripts!")
+                # Get available languages
+                st.session_state.available_languages = get_available_languages(video_id)
+                
+                if st.session_state.available_languages:
+                    # Add language selection
+                    selected_language = st.selectbox(
+                        "Select transcript language:",
+                        st.session_state.available_languages,
+                        index=0
+                    )
+                    
+                    # Get transcript in selected language
+                    transcript = get_transcript_in_language(video_id, selected_language)
+                    
+                    if transcript:
+                        st.success(f"Transcript successfully extracted in {selected_language}!")
+                else:
+                    st.warning("No built-in transcripts available for this video.")
             
-            if not transcript:
+            if not transcript and transcription_method != "YouTube Built-in":
                 st.warning("Attempting to generate transcript using selected method...")
                 
                 with st.spinner("Downloading audio and generating transcript (this may take a few minutes)..."):
