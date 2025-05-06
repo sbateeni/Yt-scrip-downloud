@@ -42,6 +42,17 @@ def get_available_languages(video_id):
         list: List of available language codes
     """
     try:
+        # First try to get any transcript to check if subtitles are enabled
+        try:
+            YouTubeTranscriptApi.get_transcript(video_id)
+        except TranscriptsDisabled:
+            st.error("Subtitles are disabled for this video")
+            return []
+        except NoTranscriptFound:
+            st.warning("No transcript found for this video")
+            return []
+            
+        # If we get here, subtitles are enabled, so get the list
         transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
         languages = []
         
@@ -85,12 +96,6 @@ def get_available_languages(video_id):
             
         return languages
         
-    except TranscriptsDisabled:
-        st.error("Subtitles are disabled for this video")
-        return []
-    except NoTranscriptFound:
-        st.error("No transcript found for this video")
-        return []
     except Exception as e:
         st.error(f"Error getting available languages: {str(e)}")
         return []

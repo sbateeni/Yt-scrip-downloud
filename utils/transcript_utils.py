@@ -24,81 +24,66 @@ def convert_to_wav(audio_path):
         st.error(f"Error converting audio to WAV: {str(e)}")
         return None
 
-def transcribe_with_whisper(audio_data):
-    """Transcribe audio using Whisper AI."""
+def transcribe_with_whisper(audio_path):
+    """Transcribe audio using OpenAI's Whisper model."""
     try:
-        # Create a temporary file for the audio data
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-            temp_file.write(audio_data)
-            temp_file.flush()
-            
-            # Check if CUDA is available
-            device = "cuda" if torch.cuda.is_available() else "cpu"
-            st.info(f"Using device: {device}")
-            
-            # Load Whisper model
-            model = whisper.load_model("base", device=device)
-            
-            # Transcribe audio
-            result = model.transcribe(temp_file.name)
-            
-            # Clean up
-            os.unlink(temp_file.name)
-            
+        # Load Whisper model
+        model = whisper.load_model("base")
+        
+        # Transcribe audio
+        result = model.transcribe(audio_path)
+        
+        if result and "text" in result:
             return result["text"]
+        else:
+            st.error("Failed to generate transcript with Whisper")
+            return None
+            
     except Exception as e:
-        st.error(f"Error transcribing with Whisper: {str(e)}")
+        st.error(f"Error in Whisper transcription: {str(e)}")
         return None
 
-def transcribe_with_speech_recognition(audio_data):
-    """Transcribe audio using SpeechRecognition."""
+def transcribe_with_google(audio_path):
+    """Transcribe audio using Google Speech Recognition."""
     try:
-        # Create a temporary file for the audio data
-        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
-            temp_file.write(audio_data)
-            temp_file.flush()
+        # Initialize recognizer
+        recognizer = sr.Recognizer()
+        
+        # Load audio file
+        with sr.AudioFile(audio_path) as source:
+            # Adjust for ambient noise
+            recognizer.adjust_for_ambient_noise(source)
+            # Record audio
+            audio = recognizer.record(source)
             
-            # Initialize recognizer
-            recognizer = sr.Recognizer()
-            
-            # Adjust for ambient noise and transcribe
-            with sr.AudioFile(temp_file.name) as source:
-                recognizer.adjust_for_ambient_noise(source)
-                audio_data = recognizer.record(source)
-            
-            # Perform transcription
-            text = recognizer.recognize_google(audio_data)
-            
-            # Clean up
-            os.unlink(temp_file.name)
-            
-            return text
-            
+        # Transcribe audio
+        text = recognizer.recognize_google(audio)
+        return text
+        
     except sr.UnknownValueError:
-        st.error("Speech Recognition could not understand the audio")
+        st.error("Google Speech Recognition could not understand the audio")
         return None
     except sr.RequestError as e:
-        st.error(f"Could not request results from Speech Recognition service: {str(e)}")
+        st.error(f"Could not request results from Google Speech Recognition service; {str(e)}")
         return None
     except Exception as e:
-        st.error(f"Error transcribing with SpeechRecognition: {str(e)}")
+        st.error(f"Error in Google Speech Recognition: {str(e)}")
         return None
 
-def save_transcript(text, video_id, output_dir="transcripts"):
-    """Save transcript to a text file."""
+def save_transcript(transcript, title):
+    """Save transcript to a file."""
     try:
-        # Create output directory if it doesn't exist
-        os.makedirs(output_dir, exist_ok=True)
+        # Create transcripts directory if it doesn't exist
+        os.makedirs("transcripts", exist_ok=True)
         
-        # Create file path
-        file_path = os.path.join(output_dir, f"transcript_{video_id}.txt")
+        # Create filename from title
+        filename = f"transcripts/{title.lower().replace(' ', '_')}.txt"
         
-        # Write transcript to file
-        with open(file_path, "w", encoding="utf-8") as f:
-            f.write(text)
+        # Save transcript
+        with open(filename, "w", encoding="utf-8") as f:
+            f.write(transcript)
             
-        return file_path
-        
+        return filename
     except Exception as e:
         st.error(f"Error saving transcript: {str(e)}")
         return None 
