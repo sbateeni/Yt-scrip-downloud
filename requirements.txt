@@ -1,6 +1,2 @@
 streamlit==1.32.0
-pytube==15.0.0
-faster-whisper==0.10.0
-torch==2.2.0
-numpy==1.26.4
 youtube-transcript-api==0.6.2 

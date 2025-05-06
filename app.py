@@ -1,115 +1,54 @@
 import streamlit as st
-from youtube_downloader_pytube import download_video_with_progress, cleanup_temp_file
-from faster_whisper import WhisperModel
-import os
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.formatters import TextFormatter
+import re
 
-# Set page config
-st.set_page_config(
-    page_title="YouTube Video Transcriber",
-    page_icon="🎥",
-    layout="wide"
-)
+st.set_page_config(page_title="YouTube Transcript Downloader", page_icon="🎥")
 
-# Title and description
-st.title("🎥 YouTube Video Transcriber")
-st.markdown("""
-This application allows you to:
-1. Get captions directly from YouTube if available
-2. If no captions are available, download audio and transcribe it using AI
-3. Get accurate transcriptions in multiple languages
+st.title("YouTube Transcript Downloader")
+st.write("Enter a YouTube video URL to get its transcript")
 
-**How it works:**
-1. Enter a YouTube URL
-2. The app will first try to get captions directly from YouTube
-3. If no captions are available, it will download the video and transcribe it using Whisper AI
-4. You'll get the full transcription with timestamps
+def extract_video_id(url):
+    # Regular expression to match YouTube video IDs
+    pattern = r'(?:youtube\.com\/(?:[^\/]+\/.+\/|(?:v|e(?:mbed)?)\/|.*[?&]v=)|youtu\.be\/)([^"&?\/\s]{11})'
+    match = re.search(pattern, url)
+    return match.group(1) if match else None
 
-**Note:** The transcription process might take a few minutes depending on the video length.
-""")
-
-# Initialize session state
-if 'transcription' not in st.session_state:
-    st.session_state.transcription = None
+def get_transcript(video_id):
+    try:
+        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+        # Format the transcript into a readable text
+        formatted_transcript = ""
+        for entry in transcript_list:
+            formatted_transcript += entry['text'] + " "
+        return formatted_transcript.strip()
+    except Exception as e:
+        return f"Error: {str(e)}"
 
 # Input for YouTube URL
-url = st.text_input("Enter YouTube URL:", placeholder="https://www.youtube.com/watch?v=...")
+youtube_url = st.text_input("Enter YouTube Video URL")
 
-if url:
-    # Try to get captions or download video
-    audio_path, captions = download_video_with_progress(url)
+if youtube_url:
+    video_id = extract_video_id(youtube_url)
     
-    if captions:
-        # Display YouTube captions
-        st.subheader("YouTube Captions:")
+    if video_id:
+        st.write("Video ID:", video_id)
         
-        # Add options for displaying captions
-        display_option = st.radio(
-            "Choose display format:",
-            ["Formatted (with timestamps)", "Plain text"]
-        )
-        
-        if display_option == "Formatted (with timestamps)":
-            st.text_area("Captions:", captions, height=400)
-        else:
-            # Convert SRT to plain text
-            plain_text = "\n".join([line for line in captions.split("\n") if not line.strip().isdigit() and "-->" not in line])
-            st.text_area("Captions:", plain_text, height=400)
-        
-        # Add download buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="Download SRT Format",
-                data=captions,
-                file_name="captions.srt",
-                mime="text/plain"
-            )
-        with col2:
-            st.download_button(
-                label="Download Plain Text",
-                data=plain_text,
-                file_name="captions.txt",
-                mime="text/plain"
-            )
-    
-    elif audio_path:
-        try:
-            # Initialize Whisper model
-            with st.spinner("Loading Whisper model..."):
-                model = WhisperModel("base", device="cpu", compute_type="int8")
-            
-            # Transcribe audio
-            with st.spinner("Transcribing audio..."):
-                segments, info = model.transcribe(audio_path)
+        if st.button("Get Transcript"):
+            with st.spinner("Fetching transcript..."):
+                transcript = get_transcript(video_id)
                 
-                # Store transcription in session state
-                st.session_state.transcription = list(segments)
-                
-                # Display language info
-                st.info(f"Detected language: {info.language} (confidence: {info.language_probability:.2f})")
-            
-            # Display transcription
-            st.subheader("Transcription:")
-            for segment in st.session_state.transcription:
-                st.write(f"[{segment.start:.1f}s -> {segment.end:.1f}s] {segment.text}")
-            
-            # Add download button for transcription
-            if st.session_state.transcription:
-                transcription_text = "\n".join([f"[{s.start:.1f}s -> {s.end:.1f}s] {s.text}" for s in st.session_state.transcription])
-                st.download_button(
-                    label="Download Transcription",
-                    data=transcription_text,
-                    file_name="transcription.txt",
-                    mime="text/plain"
-                )
-        
-        except Exception as e:
-            st.error(f"Error during transcription: {str(e)}")
-        
-        finally:
-            # Clean up temporary file
-            cleanup_temp_file(audio_path)
-
-# Add footer
-st.markdown("---")
-st.markdown("Made with ❤️ using Streamlit and Whisper AI") 
+                if transcript.startswith("Error"):
+                    st.error(transcript)
+                else:
+                    st.text_area("Transcript", transcript, height=400)
+                    
+                    # Download button
+                    st.download_button(
+                        label="Download Transcript",
+                        data=transcript,
+                        file_name=f"transcript_{video_id}.txt",
+                        mime="text/plain"
+                    )
+    else:
+        st.error("Invalid YouTube URL. Please enter a valid YouTube video URL.") 

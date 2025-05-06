@@ -1,59 +1,37 @@
-# YouTube Video Transcription App
+# YouTube Transcript Downloader
 
-This application uses Whisper AI to transcribe YouTube videos. It provides a simple web interface built with Streamlit.
+A Streamlit web application that allows you to download transcripts from YouTube videos.
 
 ## Features
-- YouTube video URL input
-- Audio extraction from videos
-- Transcription using Whisper AI
-- Clean and simple user interface
 
-## Setup Instructions
+- Extract transcripts from any YouTube video
+- Download transcripts as text files
+- Simple and user-friendly interface
+- Works with both regular YouTube URLs and shortened youtu.be URLs
 
-1. Install the required dependencies:
-```bash
-pip install -r requirements.txt
-```
+## How to Use
 
-2. Run the application:
-```bash
-streamlit run app.py
-```
+1. Enter a YouTube video URL in the input field
+2. Click the "Get Transcript" button
+3. View the transcript in the text area
+4. Click "Download Transcript" to save the transcript as a text file
 
-## Usage
-1. Open the application in your web browser
-2. Paste a YouTube video URL
-3. Click "Transcribe"
-4. Wait for the transcription to complete
-5. View the transcribed text
+## Deployment
 
----
+This application is designed to be deployed on Streamlit Cloud. To deploy:
 
-# تطبيق نسخ فيديوهات اليوتيوب
+1. Push this repository to GitHub
+2. Go to [Streamlit Cloud](https://streamlit.io/cloud)
+3. Create a new app and connect it to your GitHub repository
+4. Select `app.py` as the main file
+5. Deploy!
 
-هذا التطبيق يستخدم Whisper AI لنسخ فيديوهات اليوتيوب. يوفر واجهة ويب بسيطة مبنية باستخدام Streamlit.
+## Requirements
 
-## المميزات
-- إدخال رابط فيديو اليوتيوب
-- استخراج الصوت من الفيديوهات
-- النسخ باستخدام Whisper AI
-- واجهة مستخدم بسيطة وسهلة الاستخدام
+- Python 3.7+
+- streamlit
+- youtube-transcript-api
 
-## تعليمات الإعداد
+## Note
 
-1. تثبيت المتطلبات:
-```bash
-pip install -r requirements.txt
-```
-
-2. تشغيل التطبيق:
-```bash
-streamlit run app.py
-```
-
-## طريقة الاستخدام
-1. افتح التطبيق في متصفح الويب
-2. الصق رابط فيديو اليوتيوب
-3. انقر على "نسخ"
-4. انتظر حتى اكتمال النسخ
-5. عرض النص المنسوخ 
+Some YouTube videos may not have available transcripts, or the transcripts may be disabled. In such cases, the application will display an error message. 
