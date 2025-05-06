@@ -1,5 +1,5 @@
 import streamlit as st
-import whisper
+from faster_whisper import WhisperModel
 import os
 from youtube_downloader import download_video_with_progress, cleanup_temp_file
 
@@ -13,21 +13,25 @@ st.set_page_config(
 # Title and description
 st.title("🎥 YouTube Video Transcription")
 st.markdown("""
-This application transcribes YouTube videos using Whisper AI.
+This application transcribes YouTube videos using Faster Whisper.
 Simply paste a YouTube URL and get the transcription!
 """)
 
 # Initialize Whisper model
 @st.cache_resource
 def load_whisper_model():
-    return whisper.load_model("base")
+    # Use the base model for better performance
+    return WhisperModel("base", device="cpu", compute_type="int8")
 
 # Function to transcribe audio
 def transcribe_audio(audio_path):
     try:
         model = load_whisper_model()
-        result = model.transcribe(audio_path)
-        return result["text"]
+        segments, info = model.transcribe(audio_path, beam_size=5)
+        
+        # Combine all segments into one text
+        full_text = " ".join([segment.text for segment in segments])
+        return full_text
     except Exception as e:
         st.error(f"Error transcribing audio: {str(e)}")
         return None
