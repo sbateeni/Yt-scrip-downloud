@@ -46,9 +46,20 @@ def extract_video_id(url):
 def is_video_available(url):
     """Check if the video is available and accessible."""
     try:
-        with yt_dlp.YoutubeDL({'quiet': True}) as ydl:
-            ydl.extract_info(url, download=False)
-        return True
+        ydl_opts = {
+            'quiet': True,
+            'no_warnings': True,
+            'extract_flat': True,
+            'ignoreerrors': True,
+            'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
+            'cookiefile': 'cookies.txt'  # Fallback to cookies file
+        }
+        
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=False)
+            if info is None:
+                return False
+            return True
     except Exception as e:
         st.error(f"Video is not available: {str(e)}")
         return False
@@ -72,7 +83,17 @@ def download_audio(url, video_id, max_retries=3):
                 }],
                 'outtmpl': os.path.join(temp_dir, f'{video_id}.%(ext)s'),
                 'quiet': True,
-                'no_warnings': True
+                'no_warnings': True,
+                'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
+                'cookiefile': 'cookies.txt',  # Fallback to cookies file
+                'extract_flat': False,
+                'ignoreerrors': True,
+                'nocheckcertificate': True,
+                'geo_bypass': True,
+                'geo_verification_proxy': None,
+                'http_headers': {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+                }
             }
             
             # Download with retry mechanism
