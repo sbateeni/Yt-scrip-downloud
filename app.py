@@ -1,6 +1,7 @@
 import streamlit as st
 from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import re
+import time
 
 st.set_page_config(page_title="YouTube Transcript Downloader", page_icon="🎥")
 
@@ -13,28 +14,43 @@ def extract_video_id(url):
     match = re.search(pattern, url)
     return match.group(1) if match else None
 
-def get_transcript(video_id):
-    try:
-        # First try to get the transcript in the original language
-        transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        return format_transcript(transcript_list)
-    except (TranscriptsDisabled, NoTranscriptFound):
+def get_transcript(video_id, max_retries=3):
+    for attempt in range(max_retries):
         try:
-            # If original language fails, try to get available transcripts
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            
-            # Try to get English transcript first
+            # First try to get the transcript in the original language
+            transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
+            return format_transcript(transcript_list)
+        except (TranscriptsDisabled, NoTranscriptFound):
             try:
-                transcript = transcript_list.find_transcript(['en'])
-                return format_transcript(transcript.fetch())
-            except:
-                # If English is not available, get the first available transcript
-                transcript = transcript_list.find_generated_transcript(['en', 'ar', 'fr', 'es', 'de'])
-                return format_transcript(transcript.fetch())
+                # If original language fails, try to get available transcripts
+                transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+                
+                # Try to get English transcript first
+                try:
+                    transcript = transcript_list.find_transcript(['en'])
+                    return format_transcript(transcript.fetch())
+                except:
+                    # If English is not available, try other languages
+                    try:
+                        # Try to get any available manual transcript
+                        transcript = transcript_list.find_manually_created_transcript(['en', 'ar', 'fr', 'es', 'de'])
+                        return format_transcript(transcript.fetch())
+                    except:
+                        # If no manual transcript, try generated ones
+                        transcript = transcript_list.find_generated_transcript(['en', 'ar', 'fr', 'es', 'de'])
+                        return format_transcript(transcript.fetch())
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    time.sleep(1)  # Wait before retrying
+                    continue
+                return f"Error: Could not retrieve transcript. {str(e)}"
         except Exception as e:
-            return f"Error: Could not retrieve transcript. {str(e)}"
-    except Exception as e:
-        return f"Error: {str(e)}"
+            if attempt < max_retries - 1:
+                time.sleep(1)  # Wait before retrying
+                continue
+            return f"Error: {str(e)}"
+    
+    return "Error: Maximum retry attempts reached. Please try again later."
 
 def format_transcript(transcript_list):
     formatted_transcript = ""
@@ -52,11 +68,12 @@ if youtube_url:
         st.write("Video ID:", video_id)
         
         if st.button("Get Transcript"):
-            with st.spinner("Fetching transcript..."):
+            with st.spinner("Fetching transcript... This might take a few seconds."):
                 transcript = get_transcript(video_id)
                 
                 if transcript.startswith("Error"):
                     st.error(transcript)
+                    st.info("Tips:\n- Make sure the video has captions enabled\n- Try a different video\n- Check if the video is publicly accessible")
                 else:
                     st.text_area("Transcript", transcript, height=400)
                     
