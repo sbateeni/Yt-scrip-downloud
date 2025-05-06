@@ -1,5 +1,5 @@
 import re
-import yt_dlp
+from pytube import YouTube
 import streamlit as st
 import os
 import tempfile
@@ -46,20 +46,10 @@ def extract_video_id(url):
 def is_video_available(url):
     """Check if the video is available and accessible."""
     try:
-        ydl_opts = {
-            'quiet': True,
-            'no_warnings': True,
-            'extract_flat': True,
-            'ignoreerrors': True,
-            'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
-            'cookiefile': 'cookies.txt'  # Fallback to cookies file
-        }
-        
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(url, download=False)
-            if info is None:
-                return False
-            return True
+        yt = YouTube(url)
+        # Try to access video info
+        yt.check_availability()
+        return True
     except Exception as e:
         st.error(f"Video is not available: {str(e)}")
         return False
@@ -74,39 +64,37 @@ def download_audio(url, video_id, max_retries=3):
             
         # Create a temporary directory
         with tempfile.TemporaryDirectory() as temp_dir:
-            # Configure yt-dlp options
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'postprocessors': [{
-                    'key': 'FFmpegExtractAudio',
-                    'preferredcodec': 'wav',
-                }],
-                'outtmpl': os.path.join(temp_dir, f'{video_id}.%(ext)s'),
-                'quiet': True,
-                'no_warnings': True,
-                'cookiesfrombrowser': ('chrome',),  # Try to use Chrome cookies
-                'cookiefile': 'cookies.txt',  # Fallback to cookies file
-                'extract_flat': False,
-                'ignoreerrors': True,
-                'nocheckcertificate': True,
-                'geo_bypass': True,
-                'geo_verification_proxy': None,
-                'http_headers': {
-                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-                }
-            }
+            # Initialize YouTube object
+            yt = YouTube(clean_url)
+            
+            # Get audio stream
+            audio_stream = yt.streams.filter(only_audio=True).first()
+            
+            if not audio_stream:
+                st.error("No audio stream found for this video")
+                return None
+                
+            # Set output path
+            output_path = os.path.join(temp_dir, f"{video_id}.mp4")
             
             # Download with retry mechanism
             for attempt in range(max_retries):
                 try:
-                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                        ydl.download([clean_url])
+                    # Download the audio
+                    audio_stream.download(
+                        output_path=temp_dir,
+                        filename=f"{video_id}.mp4"
+                    )
                     
-                    # Find the downloaded file
-                    wav_file = os.path.join(temp_dir, f'{video_id}.wav')
-                    if os.path.exists(wav_file):
+                    # Verify file was downloaded
+                    if os.path.exists(output_path):
+                        # Convert to WAV format
+                        audio = AudioSegment.from_file(output_path)
+                        wav_path = os.path.join(temp_dir, f"{video_id}.wav")
+                        audio.export(wav_path, format="wav")
+                        
                         # Read the WAV file into memory
-                        with open(wav_file, 'rb') as f:
+                        with open(wav_path, 'rb') as f:
                             audio_data = f.read()
                         return audio_data
                         

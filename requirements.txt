@@ -1,6 +1,6 @@
 streamlit==1.32.0
 validators==0.22.0
-yt-dlp==2024.3.10
+pytube==15.0.0
 youtube-transcript-api==0.6.2
 openai-whisper==20231117
 torch==2.2.0
