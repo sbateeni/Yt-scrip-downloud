@@ -1,172 +1,74 @@
 import streamlit as st
-import validators
-import sys
-import os
+import whisper
+from pytube import YouTube
 import tempfile
+import os
 
-# Import utility functions
-from utils.youtube_utils import extract_video_id, download_audio, is_video_available
-from utils.youtube_transcript import get_youtube_transcript, get_available_languages, get_transcript_in_language
-from utils.transcript_utils import (
-    transcribe_with_whisper,
-    transcribe_with_speech_recognition,
-    save_transcript
+# Set page configuration
+st.set_page_config(
+    page_title="YouTube Video Transcription",
+    page_icon="🎥",
+    layout="wide"
 )
-from utils.system_utils import check_ffmpeg, install_requirements
 
-# Initialize session state
-if 'processing' not in st.session_state:
-    st.session_state.processing = False
-if 'error' not in st.session_state:
-    st.session_state.error = None
-if 'available_languages' not in st.session_state:
-    st.session_state.available_languages = []
-if 'audio_data' not in st.session_state:
-    st.session_state.audio_data = None
-if 'current_video_id' not in st.session_state:
-    st.session_state.current_video_id = None
+# Title and description
+st.title("🎥 YouTube Video Transcription")
+st.markdown("""
+This application transcribes YouTube videos using Whisper AI.
+Simply paste a YouTube URL and get the transcription!
+""")
 
-# Cache only the audio download function
-@st.cache_data(ttl=3600)  # Cache for 1 hour
-def cached_download_audio(url, video_id):
-    return download_audio(url, video_id)
+# Initialize Whisper model
+@st.cache_resource
+def load_whisper_model():
+    return whisper.load_model("base")
 
+# Function to download YouTube video
+def download_youtube_audio(url):
+    try:
+        yt = YouTube(url)
+        audio_stream = yt.streams.filter(only_audio=True).first()
+        
+        # Create a temporary file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+            audio_stream.download(filename=temp_file.name)
+            return temp_file.name
+    except Exception as e:
+        st.error(f"Error downloading video: {str(e)}")
+        return None
+
+# Function to transcribe audio
+def transcribe_audio(audio_path):
+    try:
+        model = load_whisper_model()
+        result = model.transcribe(audio_path)
+        return result["text"]
+    except Exception as e:
+        st.error(f"Error transcribing audio: {str(e)}")
+        return None
+
+# Main application
 def main():
-    # Set page configuration
-    st.set_page_config(
-        page_title="YouTube Transcript Extractor",
-        page_icon="🎥",
-        layout="centered"
-    )
-
-    # Add title and description
-    st.title("🎥 YouTube Transcript Extractor")
-    st.markdown("""
-    This application extracts transcripts from YouTube videos using multiple methods:
-    1. YouTube's built-in transcripts (if available)
-    2. AI-powered speech recognition (Whisper)
-    3. Google Speech Recognition
-    """)
-
-    # Check and install requirements if needed
-    if not check_ffmpeg():
-        st.warning("FFmpeg is not installed. Installing required components...")
-        if install_requirements():
-            st.success("Requirements installed successfully!")
+    # Input for YouTube URL
+    youtube_url = st.text_input("Enter YouTube URL:", placeholder="https://www.youtube.com/watch?v=...")
+    
+    if st.button("Transcribe"):
+        if youtube_url:
+            with st.spinner("Downloading video..."):
+                audio_path = download_youtube_audio(youtube_url)
+                
+            if audio_path:
+                with st.spinner("Transcribing audio..."):
+                    transcription = transcribe_audio(audio_path)
+                    
+                if transcription:
+                    st.success("Transcription completed!")
+                    st.text_area("Transcription:", transcription, height=300)
+                    
+                # Clean up temporary file
+                os.unlink(audio_path)
         else:
-            st.error("Failed to install requirements. Please install FFmpeg manually.")
-
-    # Input field for YouTube URL
-    url = st.text_input("Enter YouTube URL:", placeholder="https://www.youtube.com/watch?v=...")
-
-    # Add transcription method selection
-    transcription_method = st.radio(
-        "Select transcription method:",
-        ["YouTube Built-in", "Whisper AI", "Google Speech Recognition"],
-        index=0
-    )
-
-    # Add convert button
-    convert_button = st.button("Convert to Transcript", disabled=st.session_state.processing)
-
-    if url and convert_button and not st.session_state.processing:
-        try:
-            st.session_state.processing = True
-            st.session_state.error = None
-
-            if not validators.url(url):
-                st.error("Please enter a valid URL")
-                return
-
-            # Check if video is available
-            if not is_video_available(url):
-                st.error("This video is not available or is restricted")
-                return
-
-            video_id = extract_video_id(url)
-            
-            if not video_id:
-                st.error("Invalid YouTube URL. Please enter a valid YouTube video URL.")
-                return
-
-            st.info("Video ID detected! Processing...")
-            
-            transcript = None
-            
-            # Try different transcription methods based on selection
-            if transcription_method == "YouTube Built-in":
-                # Get available languages
-                st.session_state.available_languages = get_available_languages(video_id)
-                
-                if st.session_state.available_languages:
-                    # Add language selection
-                    selected_language = st.selectbox(
-                        "Select transcript language:",
-                        st.session_state.available_languages,
-                        index=0
-                    )
-                    
-                    # Get transcript in selected language
-                    transcript = get_transcript_in_language(video_id, selected_language)
-                    
-                    if transcript:
-                        st.success(f"Transcript successfully extracted in {selected_language}!")
-                else:
-                    st.warning("No built-in transcripts available for this video.")
-            
-            if not transcript and transcription_method != "YouTube Built-in":
-                st.warning("Attempting to generate transcript using selected method...")
-                
-                with st.spinner("Downloading audio and generating transcript (this may take a few minutes)..."):
-                    # Check if we already have the audio data for this video
-                    if (st.session_state.current_video_id != video_id or 
-                        st.session_state.audio_data is None):
-                        # Download audio
-                        st.session_state.audio_data = cached_download_audio(url, video_id)
-                        st.session_state.current_video_id = video_id
-                    
-                    if not st.session_state.audio_data:
-                        st.error("Failed to download audio. Please try again later.")
-                        return
-
-                    # Transcribe using selected method
-                    if transcription_method == "Whisper AI":
-                        transcript = transcribe_with_whisper(st.session_state.audio_data)
-                    else:  # Google Speech Recognition
-                        transcript = transcribe_with_speech_recognition(st.session_state.audio_data)
-                    
-                    if transcript:
-                        st.success(f"Transcript successfully generated using {transcription_method}!")
-                    else:
-                        st.error(f"Failed to generate transcript using {transcription_method}. Please try another method.")
-                        return
-
-            if transcript:
-                # Display transcript
-                st.text_area("Transcript:", transcript, height=400)
-                
-                # Save transcript to file
-                saved_path = save_transcript(transcript, video_id)
-                if saved_path:
-                    st.success(f"Transcript saved to: {saved_path}")
-                
-                # Add download button
-                st.download_button(
-                    label="Download Transcript",
-                    data=transcript,
-                    file_name=f"transcript_{video_id}.txt",
-                    mime="text/plain"
-                )
-
-        except Exception as e:
-            st.error(f"An error occurred: {str(e)}")
-            st.session_state.error = str(e)
-        finally:
-            st.session_state.processing = False
-
-    # Add footer
-    st.markdown("---")
-    st.markdown("Made with ❤️ using Streamlit and various transcription tools")
+            st.warning("Please enter a YouTube URL")
 
 if __name__ == "__main__":
     main() 
