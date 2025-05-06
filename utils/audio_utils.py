@@ -50,18 +50,25 @@ def download_audio(url, temp_dir):
             'no_color': True,
             'prefer_insecure': True,
             'http_chunk_size': 10485760,
-            'ssl_verify': False,  # تعطيل التحقق من SSL
+            'ssl_verify': False,
         }
 
         # محاولة التحميل المباشر
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 st.info("جاري تحميل الفيديو...")
+                # أولاً، الحصول على معلومات الفيديو
+                info = ydl.extract_info(url, download=False)
+                st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
+                
+                # ثم تحميل الصوت
                 info_dict = ydl.extract_info(url, download=True)
+                st.info("تم تحميل الفيديو بنجاح")
         except Exception as e:
             st.warning(f"محاولة تحميل بديلة... (الخطأ: {str(e)})")
             # محاولة بديلة مع خيارات مختلفة
             ydl_opts.update({
+                'format': 'bestaudio[ext=m4a]/bestaudio/best',
                 'nocheckcertificate': True,
                 'extract_flat': True,
                 'prefer_insecure': True,
@@ -73,12 +80,16 @@ def download_audio(url, temp_dir):
             
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
+                    st.info("جاري تحميل الفيديو (المحاولة الثانية)...")
+                    info = ydl2.extract_info(url, download=False)
+                    st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
                     info_dict = ydl2.extract_info(url, download=True)
+                    st.info("تم تحميل الفيديو بنجاح")
             except Exception as e2:
                 st.warning(f"محاولة تحميل نهائية... (الخطأ: {str(e2)})")
                 # محاولة نهائية مع خيارات أبسط
                 ydl_opts.update({
-                    'format': 'bestaudio',
+                    'format': 'bestaudio[ext=m4a]/bestaudio/best',
                     'extract_audio': True,
                     'audio_format': 'wav',
                     'nocheckcertificate': True,
@@ -88,11 +99,18 @@ def download_audio(url, temp_dir):
                     'ssl_verify': False,
                 })
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
+                    st.info("جاري تحميل الفيديو (المحاولة النهائية)...")
+                    info = ydl3.extract_info(url, download=False)
+                    st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
                     info_dict = ydl3.extract_info(url, download=True)
+                    st.info("تم تحميل الفيديو بنجاح")
 
         # البحث عن الملف المحمل
         st.info("جاري البحث عن الملف الصوتي...")
         downloaded_filepath = None
+        
+        # عرض محتويات المجلد المؤقت
+        st.info(f"محتويات المجلد المؤقت: {os.listdir(temp_dir)}")
         
         # البحث عن الملف بامتدادات مختلفة
         for ext in ['.wav', '.mp3', '.m4a', '.webm']:
@@ -106,6 +124,15 @@ def download_audio(url, temp_dir):
 
         if not downloaded_filepath:
             raise Exception("لم يتم العثور على الملف الصوتي بعد التحميل")
+
+        # التحقق من وجود الملف وحجمه
+        if os.path.exists(downloaded_filepath):
+            file_size = os.path.getsize(downloaded_filepath)
+            st.info(f"حجم الملف: {file_size / 1024 / 1024:.2f} MB")
+            if file_size == 0:
+                raise Exception("الملف المحمل فارغ")
+        else:
+            raise Exception(f"الملف غير موجود: {downloaded_filepath}")
 
         return downloaded_filepath
     except Exception as e:
