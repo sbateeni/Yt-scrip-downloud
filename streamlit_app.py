@@ -1,15 +1,12 @@
 import streamlit as st
 import os
-import subprocess
-import sys
 import tempfile
 import shutil
-import yt_dlp
 import validators
-import io
-from docx import Document
-import torch
-import numpy as np
+
+from utils.whisper_utils import configure_pytorch, load_whisper_model
+from utils.audio_utils import download_audio
+from utils.file_utils import create_download_files
 
 # تكوين Streamlit
 st.set_page_config(
@@ -19,84 +16,7 @@ st.set_page_config(
 )
 
 # تكوين PyTorch
-torch.set_num_threads(4)
-torch.set_num_interop_threads(4)
-
-def setup_environment():
-    """تثبيت المكتبات المطلوبة"""
-    try:
-        import whisper
-        if not hasattr(whisper, "load_model"):
-            raise ImportError("نسخة whisper غير صالحة")
-        return whisper
-    except Exception:
-        st.warning("جاري تثبيت مكتبة whisper...")
-        subprocess.check_call([sys.executable, "-m", "pip", "install", "git+https://github.com/openai/whisper.git"])
-        import whisper
-        return whisper
-
-@st.cache_resource(show_spinner=False)
-def load_whisper_model():
-    """تحميل نموذج Whisper مع التخزين المؤقت"""
-    try:
-        whisper = setup_environment()
-        model = whisper.load_model("base")
-        return model
-    except Exception as e:
-        st.error(f"خطأ في تحميل النموذج: {str(e)}")
-        return None
-
-def download_audio(url, temp_dir):
-    """تحميل الصوت من فيديو يوتيوب"""
-    try:
-        audio_filename_template = os.path.join(temp_dir, 'audio')
-        ydl_opts = {
-            'format': 'bestaudio/best',
-            'extract_audio': True,
-            'audio_format': 'wav',
-            'outtmpl': audio_filename_template,
-            'noplaylist': True,
-            'nocheckcertificate': True,
-            'logtostderr': False,
-            'quiet': True,
-            'no_warnings': True,
-        }
-
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info_dict = ydl.extract_info(url, download=True)
-            downloaded_filepath = None
-            
-            if 'requested_downloads' in info_dict and info_dict['requested_downloads']:
-                downloaded_filepath = info_dict['requested_downloads'][0]['filepath']
-            elif 'entries' in info_dict:
-                if info_dict['entries'] and 'requested_downloads' in info_dict['entries'][0] and info_dict['entries'][0]['requested_downloads']:
-                    downloaded_filepath = info_dict['entries'][0]['requested_downloads'][0]['filepath']
-            else:
-                for fname in os.listdir(temp_dir):
-                    if fname.startswith(os.path.basename(audio_filename_template)):
-                        downloaded_filepath = os.path.join(temp_dir, fname)
-                        break
-
-        return downloaded_filepath
-    except Exception as e:
-        raise Exception(f"خطأ في تحميل الصوت: {str(e)}")
-
-def create_download_files(text):
-    """إنشاء ملفات التحميل"""
-    try:
-        # ملف Word
-        docx_buffer = io.BytesIO()
-        doc = Document()
-        doc.add_paragraph(text)
-        doc.save(docx_buffer)
-        docx_buffer.seek(0)
-
-        # ملف نصي
-        txt_buffer = text.encode('utf-8')
-
-        return docx_buffer.getvalue(), txt_buffer
-    except Exception as e:
-        raise Exception(f"خطأ في إنشاء الملفات: {str(e)}")
+configure_pytorch()
 
 def main():
     # العنوان الرئيسي
