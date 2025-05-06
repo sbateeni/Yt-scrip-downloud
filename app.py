@@ -4,7 +4,7 @@ import sys
 import os
 
 # Import utility functions
-from utils.youtube_utils import extract_video_id, download_audio
+from utils.youtube_utils import extract_video_id, download_audio, is_video_available
 from utils.transcript_utils import get_youtube_transcript, transcribe_with_whisper
 from utils.system_utils import check_ffmpeg, install_requirements
 
@@ -55,6 +55,11 @@ def main():
 
             if not validators.url(url):
                 st.error("Please enter a valid URL")
+                return
+
+            # Check if video is available
+            if not is_video_available(url):
+                st.error("This video is not available or is restricted")
                 return
 
             video_id = extract_video_id(url)
