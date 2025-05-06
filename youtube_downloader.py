@@ -89,7 +89,12 @@ def download_youtube_audio(url, max_retries=3):
                     'prefer_ffmpeg': True,
                     'keepvideo': False,
                     'writethumbnail': False,
-                    'verbose': True
+                    'verbose': True,
+                    'postprocessor_args': [
+                        '-ar', '44100',  # Set audio sample rate
+                        '-ac', '2',      # Set audio channels to stereo
+                        '-b:a', '192k'   # Set audio bitrate
+                    ]
                 }
 
                 try:
