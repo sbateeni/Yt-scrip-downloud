@@ -63,8 +63,8 @@ def download_youtube_audio(url, max_retries=3):
                 st.error("Invalid YouTube URL format")
                 return None
 
-            # Create a temporary file
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+            # Create a temporary file with .mp3 extension
+            with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as temp_file:
                 ydl_opts = {
                     'format': 'bestaudio/best',
                     'postprocessors': [{
@@ -84,13 +84,24 @@ def download_youtube_audio(url, max_retries=3):
                             'player_client': ['android'],
                             'player_skip': ['js', 'configs', 'webpage']
                         }
-                    }
+                    },
+                    'format_sort': ['acodec:mp4a.40.2'],
+                    'prefer_ffmpeg': True,
+                    'keepvideo': False,
+                    'writethumbnail': False,
+                    'verbose': True
                 }
 
                 try:
                     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                         ydl.download([url])
-                    return temp_file.name
+                    
+                    # Verify the file exists and has content
+                    if os.path.exists(temp_file.name) and os.path.getsize(temp_file.name) > 0:
+                        return temp_file.name
+                    else:
+                        raise Exception("Downloaded file is empty or does not exist")
+                        
                 except Exception as e:
                     if attempt < max_retries - 1:
                         st.warning(f"Download attempt {attempt + 1} failed, retrying...")
