@@ -2,6 +2,7 @@ import streamlit as st
 import validators
 import sys
 import os
+import tempfile
 
 # Import utility functions
 from utils.youtube_utils import extract_video_id, download_audio, is_video_available
@@ -13,19 +14,34 @@ from utils.transcript_utils import (
 )
 from utils.system_utils import check_ffmpeg, install_requirements
 
-def initialize_session_state():
-    """Initialize session state variables."""
-    if 'processing' not in st.session_state:
-        st.session_state.processing = False
-    if 'error' not in st.session_state:
-        st.session_state.error = None
-    if 'available_languages' not in st.session_state:
-        st.session_state.available_languages = []
+# Initialize session state
+if 'processing' not in st.session_state:
+    st.session_state.processing = False
+if 'error' not in st.session_state:
+    st.session_state.error = None
+if 'available_languages' not in st.session_state:
+    st.session_state.available_languages = []
+if 'audio_data' not in st.session_state:
+    st.session_state.audio_data = None
+if 'current_video_id' not in st.session_state:
+    st.session_state.current_video_id = None
+if 'transcript' not in st.session_state:
+    st.session_state.transcript = None
+
+# Cache the transcription functions
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def cached_transcribe_whisper(audio_data):
+    return transcribe_with_whisper(audio_data)
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def cached_transcribe_speech(audio_data):
+    return transcribe_with_speech_recognition(audio_data)
+
+@st.cache_data(ttl=3600)  # Cache for 1 hour
+def cached_download_audio(url, video_id):
+    return download_audio(url, video_id)
 
 def main():
-    # Initialize session state
-    initialize_session_state()
-
     # Set page configuration
     st.set_page_config(
         page_title="YouTube Transcript Extractor",
@@ -85,51 +101,64 @@ def main():
 
             st.info("Video ID detected! Processing...")
             
-            transcript = None
-            
-            # Try different transcription methods based on selection
-            if transcription_method == "YouTube Built-in":
-                # Get available languages
-                st.session_state.available_languages = get_available_languages(video_id)
+            # Check if we already have the transcript for this video
+            if (st.session_state.current_video_id == video_id and 
+                st.session_state.transcript is not None):
+                st.success("Using cached transcript!")
+                transcript = st.session_state.transcript
+            else:
+                transcript = None
                 
-                if st.session_state.available_languages:
-                    # Add language selection
-                    selected_language = st.selectbox(
-                        "Select transcript language:",
-                        st.session_state.available_languages,
-                        index=0
-                    )
+                # Try different transcription methods based on selection
+                if transcription_method == "YouTube Built-in":
+                    # Get available languages
+                    st.session_state.available_languages = get_available_languages(video_id)
                     
-                    # Get transcript in selected language
-                    transcript = get_transcript_in_language(video_id, selected_language)
-                    
-                    if transcript:
-                        st.success(f"Transcript successfully extracted in {selected_language}!")
-                else:
-                    st.warning("No built-in transcripts available for this video.")
-            
-            if not transcript and transcription_method != "YouTube Built-in":
-                st.warning("Attempting to generate transcript using selected method...")
-                
-                with st.spinner("Downloading audio and generating transcript (this may take a few minutes)..."):
-                    # Download audio
-                    audio_path = download_audio(url, video_id)
-                    
-                    if not audio_path:
-                        st.error("Failed to download audio. Please try again later.")
-                        return
-
-                    # Transcribe using selected method
-                    if transcription_method == "Whisper AI":
-                        transcript = transcribe_with_whisper(audio_path)
-                    else:  # Google Speech Recognition
-                        transcript = transcribe_with_speech_recognition(audio_path)
-                    
-                    if transcript:
-                        st.success(f"Transcript successfully generated using {transcription_method}!")
+                    if st.session_state.available_languages:
+                        # Add language selection
+                        selected_language = st.selectbox(
+                            "Select transcript language:",
+                            st.session_state.available_languages,
+                            index=0
+                        )
+                        
+                        # Get transcript in selected language
+                        transcript = get_transcript_in_language(video_id, selected_language)
+                        
+                        if transcript:
+                            st.success(f"Transcript successfully extracted in {selected_language}!")
                     else:
-                        st.error(f"Failed to generate transcript using {transcription_method}. Please try another method.")
-                        return
+                        st.warning("No built-in transcripts available for this video.")
+                
+                if not transcript and transcription_method != "YouTube Built-in":
+                    st.warning("Attempting to generate transcript using selected method...")
+                    
+                    with st.spinner("Downloading audio and generating transcript (this may take a few minutes)..."):
+                        # Check if we already have the audio data
+                        if (st.session_state.current_video_id != video_id or 
+                            st.session_state.audio_data is None):
+                            # Download audio
+                            st.session_state.audio_data = cached_download_audio(url, video_id)
+                            st.session_state.current_video_id = video_id
+                        
+                        if not st.session_state.audio_data:
+                            st.error("Failed to download audio. Please try again later.")
+                            return
+
+                        # Transcribe using selected method
+                        if transcription_method == "Whisper AI":
+                            transcript = cached_transcribe_whisper(st.session_state.audio_data)
+                        else:  # Google Speech Recognition
+                            transcript = cached_transcribe_speech(st.session_state.audio_data)
+                        
+                        if transcript:
+                            st.success(f"Transcript successfully generated using {transcription_method}!")
+                        else:
+                            st.error(f"Failed to generate transcript using {transcription_method}. Please try another method.")
+                            return
+
+            # Store the transcript in session state
+            st.session_state.transcript = transcript
 
             if transcript:
                 # Display transcript

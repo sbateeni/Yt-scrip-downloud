@@ -3,6 +3,8 @@ import streamlit as st
 import torch
 import speech_recognition as sr
 import os
+import tempfile
+import io
 from pydub import AudioSegment
 
 def convert_to_wav(audio_path):
@@ -22,57 +24,55 @@ def convert_to_wav(audio_path):
         st.error(f"Error converting audio to WAV: {str(e)}")
         return None
 
-def transcribe_with_whisper(audio_path):
+def transcribe_with_whisper(audio_data):
     """Transcribe audio using Whisper AI."""
     try:
-        # Convert audio to WAV if needed
-        wav_path = convert_to_wav(audio_path)
-        if not wav_path:
-            return None
-
-        # Check if CUDA is available
-        device = "cuda" if torch.cuda.is_available() else "cpu"
-        st.info(f"Using device: {device}")
-        
-        # Load Whisper model
-        model = whisper.load_model("base", device=device)
-        
-        # Transcribe audio
-        result = model.transcribe(wav_path)
-        
-        # Clean up temporary WAV file if it was created
-        if wav_path != audio_path and os.path.exists(wav_path):
-            os.remove(wav_path)
+        # Create a temporary file for the audio data
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            temp_file.write(audio_data)
+            temp_file.flush()
             
-        return result["text"]
+            # Check if CUDA is available
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            st.info(f"Using device: {device}")
+            
+            # Load Whisper model
+            model = whisper.load_model("base", device=device)
+            
+            # Transcribe audio
+            result = model.transcribe(temp_file.name)
+            
+            # Clean up
+            os.unlink(temp_file.name)
+            
+            return result["text"]
     except Exception as e:
         st.error(f"Error transcribing with Whisper: {str(e)}")
         return None
 
-def transcribe_with_speech_recognition(audio_path):
+def transcribe_with_speech_recognition(audio_data):
     """Transcribe audio using SpeechRecognition."""
     try:
-        # Convert audio to WAV if needed
-        wav_path = convert_to_wav(audio_path)
-        if not wav_path:
-            return None
-
-        # Initialize recognizer
-        recognizer = sr.Recognizer()
-        
-        # Adjust for ambient noise
-        with sr.AudioFile(wav_path) as source:
-            recognizer.adjust_for_ambient_noise(source)
-            audio_data = recognizer.record(source)
-        
-        # Perform transcription
-        text = recognizer.recognize_google(audio_data)
-        
-        # Clean up temporary WAV file if it was created
-        if wav_path != audio_path and os.path.exists(wav_path):
-            os.remove(wav_path)
+        # Create a temporary file for the audio data
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as temp_file:
+            temp_file.write(audio_data)
+            temp_file.flush()
             
-        return text
+            # Initialize recognizer
+            recognizer = sr.Recognizer()
+            
+            # Adjust for ambient noise and transcribe
+            with sr.AudioFile(temp_file.name) as source:
+                recognizer.adjust_for_ambient_noise(source)
+                audio_data = recognizer.record(source)
+            
+            # Perform transcription
+            text = recognizer.recognize_google(audio_data)
+            
+            # Clean up
+            os.unlink(temp_file.name)
+            
+            return text
             
     except sr.UnknownValueError:
         st.error("Speech Recognition could not understand the audio")

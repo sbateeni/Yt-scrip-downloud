@@ -7,19 +7,26 @@ from urllib.parse import parse_qs, urlparse
 from moviepy.editor import VideoFileClip
 import os
 from pydub import AudioSegment
+import time
 
 def extract_video_id(url):
-    """Extract video ID from various YouTube URL formats."""
-    patterns = [
-        r'(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/watch\?.*&v=)([^&\n?#]+)',
-        r'youtube\.com\/shorts\/([^&\n?#]+)'
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    return None
+    """Extract video ID from YouTube URL."""
+    try:
+        # Regular expression pattern for YouTube video IDs
+        patterns = [
+            r'(?:v=|\/)([0-9A-Za-z_-]{11}).*',  # Standard YouTube URL
+            r'(?:youtu\.be\/)([0-9A-Za-z_-]{11})',  # Short YouTube URL
+            r'(?:embed\/)([0-9A-Za-z_-]{11})'  # Embedded YouTube URL
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, url)
+            if match:
+                return match.group(1)
+        return None
+    except Exception as e:
+        st.error(f"Error extracting video ID: {str(e)}")
+        return None
 
 def get_video_info(url):
     """Get video information using pytube."""
@@ -93,27 +100,57 @@ def convert_audio_format(input_path, output_format='wav'):
         st.error(f"Error converting audio format: {str(e)}")
         return None
 
-def download_audio(url, video_id):
-    """Download and process audio from YouTube video."""
+def download_audio(url, video_id, max_retries=3):
+    """Download audio from YouTube video with retry mechanism."""
     try:
-        # First download the video
-        video_path = download_video(url, video_id)
-        if not video_path:
+        # Create a temporary directory
+        with tempfile.TemporaryDirectory() as temp_dir:
+            # Initialize YouTube object
+            yt = YouTube(url)
+            
+            # Get audio stream
+            audio_stream = yt.streams.filter(only_audio=True).first()
+            
+            if not audio_stream:
+                st.error("No audio stream found for this video")
+                return None
+                
+            # Set output path
+            output_path = os.path.join(temp_dir, f"{video_id}.mp4")
+            
+            # Download with retry mechanism
+            for attempt in range(max_retries):
+                try:
+                    # Download the audio
+                    audio_stream.download(
+                        output_path=temp_dir,
+                        filename=f"{video_id}.mp4"
+                    )
+                    
+                    # Verify file was downloaded
+                    if os.path.exists(output_path):
+                        # Convert to WAV format
+                        audio = AudioSegment.from_file(output_path)
+                        wav_path = os.path.join(temp_dir, f"{video_id}.wav")
+                        audio.export(wav_path, format="wav")
+                        
+                        # Read the WAV file into memory
+                        with open(wav_path, 'rb') as f:
+                            audio_data = f.read()
+                            
+                        return audio_data
+                        
+                except Exception as e:
+                    if attempt < max_retries - 1:
+                        st.warning(f"Download attempt {attempt + 1} failed. Retrying...")
+                        time.sleep(2)  # Wait before retrying
+                    else:
+                        raise e
+                        
             return None
-
-        # Extract audio from video
-        audio_path = extract_audio_from_video(video_path)
-        if not audio_path:
-            return None
-
-        # Convert to WAV format if needed
-        if not audio_path.endswith('.wav'):
-            audio_path = convert_audio_format(audio_path, 'wav')
-
-        return audio_path
-
+            
     except Exception as e:
-        st.error(f"Error in download_audio: {str(e)}")
+        st.error(f"Error downloading video: {str(e)}")
         return None
 
 def is_video_available(url):
