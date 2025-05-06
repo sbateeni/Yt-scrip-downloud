@@ -6,6 +6,9 @@ ffmpeg-python==0.2.0
 validators==0.22.0
 torch>=2.2.0
 numpy>=1.24.3
+moviepy==1.0.3
+SpeechRecognition==3.10.0
+pydub==0.25.1
 setuptools>=65.5.1
 wheel>=0.38.4
 requests>=2.31.0
