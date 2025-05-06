@@ -3,10 +3,33 @@ import streamlit as st
 import torch
 import speech_recognition as sr
 import os
+from pydub import AudioSegment
+
+def convert_to_wav(audio_path):
+    """Convert audio file to WAV format."""
+    try:
+        # Get file extension
+        _, ext = os.path.splitext(audio_path)
+        if ext.lower() == '.wav':
+            return audio_path
+            
+        # Convert to WAV
+        audio = AudioSegment.from_file(audio_path)
+        wav_path = audio_path.replace(ext, '.wav')
+        audio.export(wav_path, format='wav')
+        return wav_path
+    except Exception as e:
+        st.error(f"Error converting audio to WAV: {str(e)}")
+        return None
 
 def transcribe_with_whisper(audio_path):
     """Transcribe audio using Whisper AI."""
     try:
+        # Convert audio to WAV if needed
+        wav_path = convert_to_wav(audio_path)
+        if not wav_path:
+            return None
+
         # Check if CUDA is available
         device = "cuda" if torch.cuda.is_available() else "cpu"
         st.info(f"Using device: {device}")
@@ -15,7 +38,12 @@ def transcribe_with_whisper(audio_path):
         model = whisper.load_model("base", device=device)
         
         # Transcribe audio
-        result = model.transcribe(audio_path)
+        result = model.transcribe(wav_path)
+        
+        # Clean up temporary WAV file if it was created
+        if wav_path != audio_path and os.path.exists(wav_path):
+            os.remove(wav_path)
+            
         return result["text"]
     except Exception as e:
         st.error(f"Error transcribing with Whisper: {str(e)}")
@@ -24,18 +52,34 @@ def transcribe_with_whisper(audio_path):
 def transcribe_with_speech_recognition(audio_path):
     """Transcribe audio using SpeechRecognition."""
     try:
+        # Convert audio to WAV if needed
+        wav_path = convert_to_wav(audio_path)
+        if not wav_path:
+            return None
+
         # Initialize recognizer
         recognizer = sr.Recognizer()
         
-        # Load audio file
-        with sr.AudioFile(audio_path) as source:
-            # Read audio data
+        # Adjust for ambient noise
+        with sr.AudioFile(wav_path) as source:
+            recognizer.adjust_for_ambient_noise(source)
             audio_data = recognizer.record(source)
+        
+        # Perform transcription
+        text = recognizer.recognize_google(audio_data)
+        
+        # Clean up temporary WAV file if it was created
+        if wav_path != audio_path and os.path.exists(wav_path):
+            os.remove(wav_path)
             
-            # Perform transcription
-            text = recognizer.recognize_google(audio_data)
-            return text
+        return text
             
+    except sr.UnknownValueError:
+        st.error("Speech Recognition could not understand the audio")
+        return None
+    except sr.RequestError as e:
+        st.error(f"Could not request results from Speech Recognition service: {str(e)}")
+        return None
     except Exception as e:
         st.error(f"Error transcribing with SpeechRecognition: {str(e)}")
         return None
