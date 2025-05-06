@@ -8,6 +8,16 @@ import yt_dlp
 import validators
 import io
 from docx import Document
+import torch
+import asyncio
+import nest_asyncio
+
+# Initialize asyncio for notebook-like environments
+nest_asyncio.apply()
+
+# Initialize PyTorch
+if not torch.cuda.is_available():
+    torch.set_num_threads(4)  # Limit CPU threads
 
 # التأكد من تثبيت whisper
 def ensure_whisper_installed():

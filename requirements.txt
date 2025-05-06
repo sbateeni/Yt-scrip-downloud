@@ -1,5 +1,8 @@
-streamlit
-yt-dlp
-validators
-openai-whisper
-python-docx
+streamlit==1.32.0
+yt-dlp==2023.12.30
+validators==0.22.0
+torch==2.2.0
+openai-whisper==20231117
+python-docx==1.1.0
+asyncio==3.4.3
+nest-asyncio==1.6.0
