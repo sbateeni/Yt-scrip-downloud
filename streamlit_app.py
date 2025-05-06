@@ -10,6 +10,10 @@ import io
 from docx import Document
 import torch
 
+# Set environment variables for PyTorch
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:512'
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
 # Initialize PyTorch with CPU settings
 device = "cuda" if torch.cuda.is_available() else "cpu"
 if device == "cpu":
@@ -28,7 +32,11 @@ def ensure_whisper_installed():
         import whisper
         return whisper
 
-whisper = ensure_whisper_installed()
+# Load Whisper model with caching
+@st.cache_resource(show_spinner=False)
+def load_whisper_model():
+    whisper = ensure_whisper_installed()
+    return whisper.load_model("base")
 
 st.title("أداة تحويل صوت فيديو يوتيوب إلى نص")
 youtube_url = st.text_input("الرجاء إدخال رابط فيديو يوتيوب:")
@@ -76,10 +84,7 @@ if st.button("تحميل الصوت وتحويله إلى نص"):
 
                     st.info("جاري تحميل نموذج Whisper...")
                     with st.spinner("الرجاء الانتظار..."):
-                        @st.cache_resource
-                        def load_model(name="base"):
-                            return whisper.load_model(name)
-                        model = load_model()
+                        model = load_whisper_model()
 
                     st.info("جاري تحويل الصوت إلى نص...")
                     with st.spinner("الرجاء الانتظار..."):
