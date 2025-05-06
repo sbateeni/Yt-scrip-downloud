@@ -14,14 +14,14 @@ st.set_page_config(
 st.title("🎥 YouTube Video Transcriber")
 st.markdown("""
 This application allows you to:
-1. Download audio from any YouTube video
-2. Transcribe the audio to text using AI
+1. Get captions directly from YouTube if available
+2. If no captions are available, download audio and transcribe it using AI
 3. Get accurate transcriptions in multiple languages
 
 **How it works:**
 1. Enter a YouTube URL
-2. The video will be downloaded and converted to audio
-3. The audio will be transcribed using Whisper AI
+2. The app will first try to get captions directly from YouTube
+3. If no captions are available, it will download the video and transcribe it using Whisper AI
 4. You'll get the full transcription with timestamps
 
 **Note:** The transcription process might take a few minutes depending on the video length.
@@ -35,10 +35,23 @@ if 'transcription' not in st.session_state:
 url = st.text_input("Enter YouTube URL:", placeholder="https://www.youtube.com/watch?v=...")
 
 if url:
-    # Download video
-    audio_path = download_video_with_progress(url)
+    # Try to get captions or download video
+    audio_path, captions = download_video_with_progress(url)
     
-    if audio_path:
+    if captions:
+        # Display YouTube captions
+        st.subheader("YouTube Captions:")
+        st.text_area("Captions:", captions, height=400)
+        
+        # Add download button for captions
+        st.download_button(
+            label="Download Captions",
+            data=captions,
+            file_name="captions.srt",
+            mime="text/plain"
+        )
+    
+    elif audio_path:
         try:
             # Initialize Whisper model
             with st.spinner("Loading Whisper model..."):

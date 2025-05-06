@@ -22,7 +22,8 @@ def get_video_info(url, max_retries=3):
                 'title': yt.title,
                 'length': yt.length,
                 'author': yt.author,
-                'views': yt.views
+                'views': yt.views,
+                'captions': yt.captions
             }
         except Exception as e:
             if attempt < max_retries - 1:
@@ -30,6 +31,35 @@ def get_video_info(url, max_retries=3):
                 time.sleep(2)
                 continue
             st.error(f"Error getting video info: {str(e)}")
+            return None
+    return None
+
+def get_youtube_captions(url, max_retries=3):
+    """Get captions from YouTube video"""
+    for attempt in range(max_retries):
+        try:
+            yt = YouTube(url)
+            captions = yt.captions
+            
+            if not captions:
+                return None
+                
+            # Try to get English captions first
+            caption = captions.get_by_language_code('en')
+            if not caption:
+                # If no English captions, get the first available language
+                caption = list(captions.values())[0]
+            
+            # Get the caption text
+            caption_text = caption.generate_srt_captions()
+            return caption_text
+            
+        except Exception as e:
+            if attempt < max_retries - 1:
+                st.warning(f"Attempt {attempt + 1} failed, retrying...")
+                time.sleep(2)
+                continue
+            st.error(f"Error getting captions: {str(e)}")
             return None
     return None
 
@@ -104,11 +134,17 @@ def download_video_with_progress(url):
         Views: {video_info['views']:,}
         """)
 
-    # Download with progress
+    # Try to get captions first
+    captions = get_youtube_captions(url)
+    if captions:
+        st.success("Found YouTube captions!")
+        return None, captions
+
+    # If no captions, download audio for transcription
     with st.spinner("Downloading video..."):
         audio_path = download_youtube_audio(url)
         
     if audio_path:
         st.success("Download completed successfully!")
-        return audio_path
-    return None 
+        return audio_path, None
+    return None, None 
