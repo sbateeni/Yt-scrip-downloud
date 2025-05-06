@@ -20,11 +20,25 @@ def get_video_info(url, max_retries=3):
             ydl_opts = {
                 'quiet': True,
                 'no_warnings': True,
-                'extract_flat': True
+                'extract_flat': True,
+                'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+                'nocheckcertificate': True,
+                'ignoreerrors': True,
+                'no_color': True,
+                'extractor_args': {
+                    'youtube': {
+                        'skip': ['dash', 'hls'],
+                        'player_client': ['android', 'web'],
+                        'player_skip': ['js', 'configs', 'webpage']
+                    }
+                }
             }
             
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
+                
+                if not info:
+                    raise Exception("Could not extract video information")
                 
                 return {
                     'title': info.get('title', 'Unknown Title'),
@@ -61,7 +75,18 @@ def download_youtube_audio(url, max_retries=3):
                     }],
                     'outtmpl': temp_file.name,
                     'quiet': True,
-                    'no_warnings': True
+                    'no_warnings': True,
+                    'cookiesfrombrowser': ('chrome',),  # Use Chrome cookies
+                    'nocheckcertificate': True,
+                    'ignoreerrors': True,
+                    'no_color': True,
+                    'extractor_args': {
+                        'youtube': {
+                            'skip': ['dash', 'hls'],
+                            'player_client': ['android', 'web'],
+                            'player_skip': ['js', 'configs', 'webpage']
+                        }
+                    }
                 }
 
                 try:
