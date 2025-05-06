@@ -4,8 +4,8 @@ pytube==15.0.0
 openai-whisper==20231117
 ffmpeg-python==0.2.0
 validators==0.22.0
-torch==2.1.0
-numpy==1.24.3
+torch>=2.2.0
+numpy>=1.24.3
 setuptools>=65.5.1
 wheel>=0.38.4
 requests>=2.31.0
