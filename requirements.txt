@@ -1,5 +1,5 @@
 streamlit
 yt-dlp
-whisper
 validators
-numpy<2
+openai-whisper
+python-docx
