@@ -1,6 +1,5 @@
 import streamlit as st
-from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api.formatters import TextFormatter
+from youtube_transcript_api import YouTubeTranscriptApi, TranscriptsDisabled, NoTranscriptFound
 import re
 
 st.set_page_config(page_title="YouTube Transcript Downloader", page_icon="🎥")
@@ -16,14 +15,32 @@ def extract_video_id(url):
 
 def get_transcript(video_id):
     try:
+        # First try to get the transcript in the original language
         transcript_list = YouTubeTranscriptApi.get_transcript(video_id)
-        # Format the transcript into a readable text
-        formatted_transcript = ""
-        for entry in transcript_list:
-            formatted_transcript += entry['text'] + " "
-        return formatted_transcript.strip()
+        return format_transcript(transcript_list)
+    except (TranscriptsDisabled, NoTranscriptFound):
+        try:
+            # If original language fails, try to get available transcripts
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
+            
+            # Try to get English transcript first
+            try:
+                transcript = transcript_list.find_transcript(['en'])
+                return format_transcript(transcript.fetch())
+            except:
+                # If English is not available, get the first available transcript
+                transcript = transcript_list.find_generated_transcript(['en', 'ar', 'fr', 'es', 'de'])
+                return format_transcript(transcript.fetch())
+        except Exception as e:
+            return f"Error: Could not retrieve transcript. {str(e)}"
     except Exception as e:
         return f"Error: {str(e)}"
+
+def format_transcript(transcript_list):
+    formatted_transcript = ""
+    for entry in transcript_list:
+        formatted_transcript += entry['text'] + " "
+    return formatted_transcript.strip()
 
 # Input for YouTube URL
 youtube_url = st.text_input("Enter YouTube Video URL")
