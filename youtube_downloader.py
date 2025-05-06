@@ -1,8 +1,7 @@
-from pytube import YouTube
+import yt_dlp
 import streamlit as st
 import tempfile
 import os
-from urllib.error import HTTPError
 import re
 import time
 
@@ -18,30 +17,27 @@ def get_video_info(url, max_retries=3):
     """Get video information with retry mechanism"""
     for attempt in range(max_retries):
         try:
-            # Create YouTube object with custom options
-            yt = YouTube(
-                url,
-                use_oauth=False,
-                allow_oauth_cache=True
-            )
-            
-            # Add a small delay to avoid rate limiting
-            time.sleep(1)
-            
-            return {
-                'title': yt.title,
-                'length': yt.length,
-                'author': yt.author,
-                'views': yt.views
+            ydl_opts = {
+                'quiet': True,
+                'no_warnings': True,
+                'extract_flat': True
             }
-        except HTTPError as e:
+            
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+                
+                return {
+                    'title': info.get('title', 'Unknown Title'),
+                    'length': info.get('duration', 0),
+                    'author': info.get('uploader', 'Unknown Author'),
+                    'views': info.get('view_count', 0)
+                }
+                
+        except Exception as e:
             if attempt < max_retries - 1:
                 st.warning(f"Attempt {attempt + 1} failed, retrying...")
-                time.sleep(2)  # Wait before retrying
+                time.sleep(2)
                 continue
-            st.error(f"HTTP Error: {str(e)}")
-            return None
-        except Exception as e:
             st.error(f"Error getting video info: {str(e)}")
             return None
     return None
@@ -54,56 +50,36 @@ def download_youtube_audio(url, max_retries=3):
                 st.error("Invalid YouTube URL format")
                 return None
 
-            # Create YouTube object with custom options
-            yt = YouTube(
-                url,
-                use_oauth=False,
-                allow_oauth_cache=True
-            )
-
-            # Get available streams
-            audio_streams = yt.streams.filter(only_audio=True)
-            
-            if not audio_streams:
-                st.error("No audio streams found for this video")
-                return None
-
-            # Try different audio streams in order of preference
-            audio_stream = None
-            for stream in audio_streams.order_by('abr').desc():
-                try:
-                    # Test if stream is available
-                    stream.check_availability()
-                    audio_stream = stream
-                    break
-                except:
-                    continue
-
-            if not audio_stream:
-                st.error("No available audio streams found")
-                return None
-
             # Create a temporary file
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp4') as temp_file:
+                ydl_opts = {
+                    'format': 'bestaudio/best',
+                    'postprocessors': [{
+                        'key': 'FFmpegExtractAudio',
+                        'preferredcodec': 'mp3',
+                        'preferredquality': '192',
+                    }],
+                    'outtmpl': temp_file.name,
+                    'quiet': True,
+                    'no_warnings': True
+                }
+
                 try:
-                    # Download with progress
-                    audio_stream.download(filename=temp_file.name)
+                    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                        ydl.download([url])
                     return temp_file.name
-                except HTTPError as e:
+                except Exception as e:
                     if attempt < max_retries - 1:
                         st.warning(f"Download attempt {attempt + 1} failed, retrying...")
-                        time.sleep(2)  # Wait before retrying
+                        time.sleep(2)
                         continue
-                    st.error(f"HTTP Error: {str(e)}")
-                    return None
-                except Exception as e:
                     st.error(f"Download Error: {str(e)}")
                     return None
 
         except Exception as e:
             if attempt < max_retries - 1:
                 st.warning(f"Attempt {attempt + 1} failed, retrying...")
-                time.sleep(2)  # Wait before retrying
+                time.sleep(2)
                 continue
             st.error(f"Error processing video: {str(e)}")
             return None
