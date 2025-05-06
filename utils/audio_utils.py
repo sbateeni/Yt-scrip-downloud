@@ -57,13 +57,11 @@ def download_audio(url, temp_dir):
         try:
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 st.info("جاري تحميل الفيديو...")
-                # أولاً، الحصول على معلومات الفيديو
-                info = ydl.extract_info(url, download=False)
-                st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
-                
-                # ثم تحميل الصوت
                 info_dict = ydl.extract_info(url, download=True)
-                st.info("تم تحميل الفيديو بنجاح")
+                if info_dict and 'title' in info_dict:
+                    st.info(f"تم تحميل الفيديو: {info_dict['title']}")
+                else:
+                    st.info("تم تحميل الفيديو بنجاح")
         except Exception as e:
             st.warning(f"محاولة تحميل بديلة... (الخطأ: {str(e)})")
             # محاولة بديلة مع خيارات مختلفة
@@ -81,10 +79,11 @@ def download_audio(url, temp_dir):
             try:
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl2:
                     st.info("جاري تحميل الفيديو (المحاولة الثانية)...")
-                    info = ydl2.extract_info(url, download=False)
-                    st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
                     info_dict = ydl2.extract_info(url, download=True)
-                    st.info("تم تحميل الفيديو بنجاح")
+                    if info_dict and 'title' in info_dict:
+                        st.info(f"تم تحميل الفيديو: {info_dict['title']}")
+                    else:
+                        st.info("تم تحميل الفيديو بنجاح")
             except Exception as e2:
                 st.warning(f"محاولة تحميل نهائية... (الخطأ: {str(e2)})")
                 # محاولة نهائية مع خيارات أبسط
@@ -100,10 +99,11 @@ def download_audio(url, temp_dir):
                 })
                 with yt_dlp.YoutubeDL(ydl_opts) as ydl3:
                     st.info("جاري تحميل الفيديو (المحاولة النهائية)...")
-                    info = ydl3.extract_info(url, download=False)
-                    st.info(f"تم العثور على الفيديو: {info.get('title', 'بدون عنوان')}")
                     info_dict = ydl3.extract_info(url, download=True)
-                    st.info("تم تحميل الفيديو بنجاح")
+                    if info_dict and 'title' in info_dict:
+                        st.info(f"تم تحميل الفيديو: {info_dict['title']}")
+                    else:
+                        st.info("تم تحميل الفيديو بنجاح")
 
         # البحث عن الملف المحمل
         st.info("جاري البحث عن الملف الصوتي...")
