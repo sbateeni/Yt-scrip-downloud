@@ -41,15 +41,36 @@ if url:
     if captions:
         # Display YouTube captions
         st.subheader("YouTube Captions:")
-        st.text_area("Captions:", captions, height=400)
         
-        # Add download button for captions
-        st.download_button(
-            label="Download Captions",
-            data=captions,
-            file_name="captions.srt",
-            mime="text/plain"
+        # Add options for displaying captions
+        display_option = st.radio(
+            "Choose display format:",
+            ["Formatted (with timestamps)", "Plain text"]
         )
+        
+        if display_option == "Formatted (with timestamps)":
+            st.text_area("Captions:", captions, height=400)
+        else:
+            # Convert SRT to plain text
+            plain_text = "\n".join([line for line in captions.split("\n") if not line.strip().isdigit() and "-->" not in line])
+            st.text_area("Captions:", plain_text, height=400)
+        
+        # Add download buttons
+        col1, col2 = st.columns(2)
+        with col1:
+            st.download_button(
+                label="Download SRT Format",
+                data=captions,
+                file_name="captions.srt",
+                mime="text/plain"
+            )
+        with col2:
+            st.download_button(
+                label="Download Plain Text",
+                data=plain_text,
+                file_name="captions.txt",
+                mime="text/plain"
+            )
     
     elif audio_path:
         try:

@@ -1,4 +1,6 @@
 from pytube import YouTube
+from youtube_transcript_api import YouTubeTranscriptApi
+from youtube_transcript_api.formatters import SRTFormatter
 import streamlit as st
 import tempfile
 import os
@@ -35,24 +37,35 @@ def get_video_info(url, max_retries=3):
     return None
 
 def get_youtube_captions(url, max_retries=3):
-    """Get captions from YouTube video"""
+    """Get captions from YouTube video using youtube-transcript-api"""
     for attempt in range(max_retries):
         try:
-            yt = YouTube(url)
-            captions = yt.captions
-            
-            if not captions:
+            video_id = extract_video_id(url)
+            if not video_id:
+                st.error("Could not extract video ID from URL")
                 return None
-                
-            # Try to get English captions first
-            caption = captions.get_by_language_code('en')
-            if not caption:
-                # If no English captions, get the first available language
-                caption = list(captions.values())[0]
+
+            # Get available transcripts
+            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
             
-            # Get the caption text
-            caption_text = caption.generate_srt_captions()
-            return caption_text
+            # Try to get Arabic transcript first, then English
+            try:
+                transcript = transcript_list.find_transcript(['ar'])
+            except:
+                try:
+                    transcript = transcript_list.find_transcript(['en'])
+                except:
+                    # If no Arabic or English transcript, get the first available one
+                    transcript = transcript_list.find_transcript(['ar', 'en'])
+            
+            # Get the transcript data
+            transcript_data = transcript.fetch()
+            
+            # Format as SRT
+            formatter = SRTFormatter()
+            srt_formatted = formatter.format_transcript(transcript_data)
+            
+            return srt_formatted
             
         except Exception as e:
             if attempt < max_retries - 1:
